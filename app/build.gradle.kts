@@ -76,26 +76,26 @@ dependencies {
   implementation(libs.androidx.compose.material.icons)
 
   // Room Database
-  implementation("androidx.room:room-runtime:2.6.1")
-  implementation("androidx.room:room-ktx:2.6.1")
-  ksp("androidx.room:room-compiler:2.6.1")
+  implementation(libs.androidx.room.runtime)
+  implementation(libs.androidx.room.ktx)
+  ksp(libs.androidx.room.compiler)
 
   // DataStore Preferences
-  implementation("androidx.datastore:datastore-preferences:1.1.2")
+  implementation(libs.androidx.datastore.preferences)
 
   // Coroutines
-  implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.1")
+  implementation(libs.kotlinx.coroutines.android)
 
   // Tooling
   debugImplementation(libs.androidx.compose.ui.tooling)
 
   // Unit Testing
-  testImplementation("junit:junit:4.13.2")
-  testImplementation("androidx.test:core-ktx:1.6.1")
-  testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.1")
-  testImplementation("androidx.room:room-testing:2.6.1")
-  testImplementation("io.mockk:mockk:1.13.13")
-  testImplementation("org.robolectric:robolectric:4.14.1")
+  testImplementation(libs.junit)
+  testImplementation(libs.androidx.test.core.ktx)
+  testImplementation(libs.kotlinx.coroutines.test)
+  testImplementation(libs.androidx.room.testing)
+  testImplementation(libs.mockk)
+  testImplementation(libs.robolectric)
 
   // Instrumented tests
   androidTestImplementation(libs.androidx.compose.ui.test.junit4)
