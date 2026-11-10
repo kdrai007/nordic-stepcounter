@@ -1,0 +1,113 @@
+package com.nordic.stepcounter.data.preferences
+
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runTest
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+
+@RunWith(RobolectricTestRunner::class)
+class ProfilePreferencesTest {
+
+    private lateinit var context: Context
+    private lateinit var profilePreferences: ProfilePreferences
+
+    @Before
+    fun setUp() = runTest {
+        context = ApplicationProvider.getApplicationContext()
+        profilePreferences = ProfilePreferences(context)
+        profilePreferences.clear()
+    }
+
+    @After
+    fun tearDown() = runTest {
+        profilePreferences.clear()
+    }
+
+    @Test
+    fun defaultProfileValues_areCorrect() = runTest {
+        val profile = profilePreferences.userProfileFlow.first()
+
+        assertEquals(175.0f, profile.heightCm, 0.001f)
+        assertEquals(70.0f, profile.weightKg, 0.001f)
+        assertTrue(profile.isMale)
+        assertEquals(0.0f, profile.customStrideLengthMeters, 0.001f)
+        assertEquals(6000, profile.dailyGoal)
+        assertFalse(profile.isPaused)
+        assertEquals(-1L, profile.lastSensorStepValue)
+        assertEquals("", profile.lastRecordedDate)
+        assertEquals(0.72625f, profile.effectiveStrideLengthMeters, 0.001f)
+    }
+
+    @Test
+    fun updatePhysicalProfile_updatesValuesCorrectly() = runTest {
+        profilePreferences.updatePhysicalProfile(
+            heightCm = 165.0f,
+            weightKg = 55.0f,
+            isMale = false,
+            customStrideLengthMeters = 0.0f
+        )
+
+        val profile = profilePreferences.userProfileFlow.first()
+        assertEquals(165.0f, profile.heightCm, 0.001f)
+        assertEquals(55.0f, profile.weightKg, 0.001f)
+        assertFalse(profile.isMale)
+        assertEquals(0.0f, profile.customStrideLengthMeters, 0.001f)
+        // 165.0 * 0.413 / 100 = 0.68145
+        assertEquals(0.68145f, profile.effectiveStrideLengthMeters, 0.001f)
+    }
+
+    @Test
+    fun customStrideLength_overridesDefaultCalculation() = runTest {
+        profilePreferences.updatePhysicalProfile(
+            heightCm = 180.0f,
+            weightKg = 75.0f,
+            isMale = true,
+            customStrideLengthMeters = 0.85f
+        )
+
+        val profile = profilePreferences.userProfileFlow.first()
+        assertEquals(0.85f, profile.customStrideLengthMeters, 0.001f)
+        assertEquals(0.85f, profile.effectiveStrideLengthMeters, 0.001f)
+    }
+
+    @Test
+    fun updateDailyGoal_updatesGoalAndDailyGoalFlow() = runTest {
+        profilePreferences.updateDailyGoal(10000)
+
+        val profile = profilePreferences.userProfileFlow.first()
+        assertEquals(10000, profile.dailyGoal)
+
+        val goalFromFlow = profilePreferences.dailyGoalFlow.first()
+        assertEquals(10000, goalFromFlow)
+    }
+
+    @Test
+    fun setPaused_togglesPauseStateAndFlow() = runTest {
+        assertFalse(profilePreferences.isPausedFlow.first())
+
+        profilePreferences.setPaused(true)
+        assertTrue(profilePreferences.isPausedFlow.first())
+        assertTrue(profilePreferences.userProfileFlow.first().isPaused)
+
+        profilePreferences.setPaused(false)
+        assertFalse(profilePreferences.isPausedFlow.first())
+        assertFalse(profilePreferences.userProfileFlow.first().isPaused)
+    }
+
+    @Test
+    fun updateLastSensorReading_updatesStepsAndDate() = runTest {
+        profilePreferences.updateLastSensorReading(steps = 14250L, date = "2026-11-10")
+
+        val profile = profilePreferences.userProfileFlow.first()
+        assertEquals(14250L, profile.lastSensorStepValue)
+        assertEquals("2026-11-10", profile.lastRecordedDate)
+    }
+}
