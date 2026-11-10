@@ -19,6 +19,9 @@ interface StepDao {
     @Query("SELECT * FROM hourly_steps WHERE date = :date ORDER BY hour ASC")
     fun getHourlyRecordsForDate(date: String): Flow<List<HourlyStepEntity>>
 
+    @Query("SELECT * FROM hourly_steps WHERE date = :date AND hour = :hour LIMIT 1")
+    suspend fun getHourlyRecordDirect(date: String, hour: Int): HourlyStepEntity?
+
     @Upsert
     suspend fun upsertDaily(entity: DailyStepEntity)
 

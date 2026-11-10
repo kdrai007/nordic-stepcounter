@@ -80,6 +80,12 @@ class StepDaoTest {
         assertEquals(1500, records[1].steps)
         assertEquals(14, records[2].hour)
         assertEquals(1200, records[2].steps)
+
+        val directRecord = stepDao.getHourlyRecordDirect("2026-11-10", 14)
+        assertEquals(1200, directRecord?.steps)
+
+        val nonExistent = stepDao.getHourlyRecordDirect("2026-11-10", 3)
+        org.junit.Assert.assertNull(nonExistent)
     }
 
     @Test
