@@ -47,7 +47,7 @@ object StepDeltaProcessor {
         }
 
         return StepDeltaResult(
-            stepsToAdd = rawDelta.coerceAtLeast(0L).toInt(),
+            stepsToAdd = rawDelta.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt(),
             newBaselineSensorSteps = currentSensorSteps
         )
     }

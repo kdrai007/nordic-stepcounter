@@ -77,4 +77,15 @@ class StepDeltaProcessorTest {
         assertEquals(0, pausedResult.stepsToAdd)
         assertEquals(2000L, pausedResult.newBaselineSensorSteps)
     }
+
+    @Test
+    fun `huge delta exceeding Int MAX_VALUE is safely coerced to Int MAX_VALUE`() {
+        val result = StepDeltaProcessor.computeDelta(
+            currentSensorSteps = Long.MAX_VALUE,
+            lastSensorSteps = 0L,
+            isPaused = false
+        )
+        assertEquals(Int.MAX_VALUE, result.stepsToAdd)
+        assertEquals(Long.MAX_VALUE, result.newBaselineSensorSteps)
+    }
 }

@@ -11,18 +11,18 @@ object StepCalculationEngine {
     private const val ESTIMATED_STEPS_PER_MINUTE = 100
 
     fun calculateDefaultStrideLengthMeters(heightCm: Float, isMale: Boolean): Float {
-        if (heightCm <= 0f) return 0f
+        if (!heightCm.isFinite() || heightCm <= 0f) return 0f
         val ratio = if (isMale) MALE_STRIDE_RATIO else FEMALE_STRIDE_RATIO
         return (heightCm * ratio) / 100f
     }
 
     fun calculateDistanceKm(steps: Int, strideMeters: Float): Float {
-        if (steps <= 0 || strideMeters <= 0f) return 0f
+        if (steps <= 0 || !strideMeters.isFinite() || strideMeters <= 0f) return 0f
         return (steps * strideMeters) / 1000f
     }
 
     fun calculateCaloriesKcal(steps: Int, weightKg: Float): Float {
-        if (steps <= 0 || weightKg <= 0f) return 0f
+        if (steps <= 0 || !weightKg.isFinite() || weightKg <= 0f) return 0f
         return steps * weightKg * CALORIE_MET_FACTOR
     }
 

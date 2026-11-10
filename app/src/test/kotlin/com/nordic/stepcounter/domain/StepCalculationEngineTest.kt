@@ -54,5 +54,10 @@ class StepCalculationEngineTest {
 
         assertEquals(0, StepCalculationEngine.calculateActiveMinutes(steps = 0))
         assertEquals(0, StepCalculationEngine.calculateActiveMinutes(steps = -100))
+
+        assertEquals(0f, StepCalculationEngine.calculateDefaultStrideLengthMeters(Float.NaN, isMale = true), 0.0001f)
+        assertEquals(0f, StepCalculationEngine.calculateDefaultStrideLengthMeters(Float.POSITIVE_INFINITY, isMale = true), 0.0001f)
+        assertEquals(0f, StepCalculationEngine.calculateDistanceKm(steps = 1000, strideMeters = Float.NaN), 0.0001f)
+        assertEquals(0f, StepCalculationEngine.calculateCaloriesKcal(steps = 1000, weightKg = Float.POSITIVE_INFINITY), 0.0001f)
     }
 }
