@@ -12,6 +12,8 @@ import com.nordic.stepcounter.domain.StepCalculationEngine
 import com.nordic.stepcounter.domain.StepDeltaProcessor
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
 import java.time.LocalTime
 
@@ -19,10 +21,24 @@ class StepRepository(
     private val stepDao: StepDao,
     private val preferences: ProfilePreferences
 ) {
+    private val sensorMutex = Mutex()
+
     val userProfileFlow: Flow<UserProfile> = preferences.userProfileFlow
     val isPausedFlow: Flow<Boolean> = preferences.isPausedFlow
     val dailyGoalFlow: Flow<Int> = preferences.dailyGoalFlow
     val appThemeFlow: Flow<AppTheme> = preferences.appThemeFlow
+
+    val todayStepRecordFlow: Flow<DailyStepEntity?>
+        get() = getDailyRecordFlow(LocalDate.now().toString())
+
+    fun getLast7DaysRecordsFlow(): Flow<List<DailyStepEntity>> =
+        getRecentDailyRecordsFlow(7)
+
+    fun getLast30DaysRecordsFlow(): Flow<List<DailyStepEntity>> =
+        getRecentDailyRecordsFlow(30)
+
+    fun getHourlyRecordsForTodayFlow(): Flow<List<HourlyStepEntity>> =
+        getHourlyRecordsFlow(LocalDate.now().toString())
 
     fun getDailyRecordFlow(date: String): Flow<DailyStepEntity?> =
         stepDao.getDailyRecord(date)
@@ -71,7 +87,7 @@ class StepRepository(
         rawSensorSteps: Long,
         date: String = LocalDate.now().toString(),
         hour: Int = LocalTime.now().hour
-    ): DailyStepEntity {
+    ): DailyStepEntity = sensorMutex.withLock {
         val profile = preferences.userProfileFlow.first()
 
         val deltaResult = StepDeltaProcessor.computeDelta(
@@ -117,7 +133,7 @@ class StepRepository(
             )
         }
 
-        return updatedDaily
+        return@withLock updatedDaily
     }
 
     suspend fun setPaused(isPaused: Boolean) {
@@ -127,7 +143,22 @@ class StepRepository(
     suspend fun updateDailyGoal(goal: Int) {
         preferences.updateDailyGoal(goal)
         val today = LocalDate.now().toString()
-        stepDao.updateDailyGoal(today, goal)
+        val affected = stepDao.updateDailyGoal(today, goal)
+        if (affected == 0) {
+            val existing = stepDao.getDailyRecordDirect(today)
+            if (existing == null) {
+                stepDao.upsertDaily(
+                    DailyStepEntity(
+                        date = today,
+                        steps = 0,
+                        distanceMeters = 0f,
+                        caloriesKcal = 0f,
+                        activeDurationSeconds = 0L,
+                        goalSteps = goal
+                    )
+                )
+            }
+        }
     }
 
     suspend fun updatePhysicalProfile(
@@ -153,6 +184,18 @@ class StepRepository(
                     StepDatabase.getInstance(context).stepDao(),
                     ProfilePreferences.getInstance(context)
                 ).also { INSTANCE = it }
+            }
+        }
+
+        fun getInstance(stepDao: StepDao, preferences: ProfilePreferences): StepRepository {
+            return INSTANCE ?: synchronized(this) {
+                INSTANCE ?: StepRepository(stepDao, preferences).also { INSTANCE = it }
+            }
+        }
+
+        fun resetInstance() {
+            synchronized(this) {
+                INSTANCE = null
             }
         }
     }

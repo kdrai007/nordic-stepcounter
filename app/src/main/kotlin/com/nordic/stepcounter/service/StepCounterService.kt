@@ -63,9 +63,7 @@ class StepCounterService : Service() {
             return
         }
 
-        val db = StepDatabase.getInstance(this)
-        val prefs = ProfilePreferences.getInstance(this)
-        repository = StepRepository(db.stepDao(), prefs)
+        repository = StepRepository.getInstance(this)
 
         createNotificationChannel()
 
@@ -82,6 +80,10 @@ class StepCounterService : Service() {
         if (!hasActivityRecognitionPermission(this)) {
             stopSelf()
             return START_NOT_STICKY
+        }
+
+        if (intent?.action != ACTION_STOP && !isForegroundStarted) {
+            startTracking()
         }
 
         when (intent?.action) {
@@ -140,6 +142,7 @@ class StepCounterService : Service() {
             sensorManager.stopListening()
         }
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+        isForegroundStarted = false
         stopSelf()
     }
 
