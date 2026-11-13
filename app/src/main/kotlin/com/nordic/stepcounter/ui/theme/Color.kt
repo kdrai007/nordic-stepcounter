@@ -119,4 +119,16 @@ val AppTheme.isDark: Boolean
         AppTheme.TOKYONIGHT_LIGHT -> false
     }
 
+val AppTheme.displayName: String
+    get() = when (this) {
+        AppTheme.NORDIC_DARK -> "Nordic Dark"
+        AppTheme.NORDIC_LIGHT -> "Nordic Light"
+        AppTheme.GRUVBOX_DARK -> "Gruvbox Dark"
+        AppTheme.GRUVBOX_LIGHT -> "Gruvbox Light"
+        AppTheme.CATPPUCCIN_DARK -> "Catppuccin Dark"
+        AppTheme.CATPPUCCIN_LIGHT -> "Catppuccin Light"
+        AppTheme.TOKYONIGHT_DARK -> "Tokyo Night Dark"
+        AppTheme.TOKYONIGHT_LIGHT -> "Tokyo Night Light"
+    }
+
 val LocalStepPalette = staticCompositionLocalOf { NordicDarkPalette }
