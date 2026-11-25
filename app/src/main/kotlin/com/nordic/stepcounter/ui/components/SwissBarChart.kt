@@ -27,14 +27,18 @@ fun SwissBarChart(
     ) {
         if (values.isEmpty()) return@Canvas
         val barCount = values.size
-        val spacing = 8.dp.toPx()
+        val spacing = if (barCount > 15) 3.dp.toPx() else 8.dp.toPx()
         val totalSpacing = spacing * (barCount - 1)
-        val barWidth = ((size.width - totalSpacing) / barCount).coerceAtLeast(4f)
+        val maxBarWidth = 36.dp.toPx()
+        val calculatedBarWidth = ((size.width - totalSpacing) / barCount).coerceAtLeast(3f)
+        val barWidth = calculatedBarWidth.coerceAtMost(maxBarWidth)
+        val totalContentWidth = barCount * barWidth + totalSpacing
+        val startOffset = ((size.width - totalContentWidth) / 2f).coerceAtLeast(0f)
 
         values.forEachIndexed { index, value ->
             val ratio = (value.toFloat() / safeMax.toFloat()).coerceIn(0.04f, 1f)
             val barHeight = size.height * ratio
-            val x = index * (barWidth + spacing)
+            val x = startOffset + index * (barWidth + spacing)
             val y = size.height - barHeight
 
             drawRoundRect(

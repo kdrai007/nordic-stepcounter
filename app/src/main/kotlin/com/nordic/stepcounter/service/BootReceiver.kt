@@ -14,7 +14,9 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         val action = intent?.action ?: return
         if (action == Intent.ACTION_BOOT_COMPLETED || action == Intent.ACTION_MY_PACKAGE_REPLACED) {
-            if (StepCounterService.hasActivityRecognitionPermission(context)) {
+            if (StepCounterService.hasActivityRecognitionPermission(context) &&
+                StepCounterService.hasStepCounterSensor(context)
+            ) {
                 val serviceIntent = Intent(context, StepCounterService::class.java).apply {
                     this.action = StepCounterService.ACTION_START
                 }

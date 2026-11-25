@@ -189,6 +189,44 @@ class StepViewModelTest {
     }
 
     @Test
+    fun `dateRollover updates uiState to observe new date and initializes record`() = runTest {
+        val day1Record = DailyStepEntity(
+            date = "2026-11-10",
+            steps = 5000,
+            distanceMeters = 3500f,
+            caloriesKcal = 250f,
+            activeDurationSeconds = 3000L,
+            goalSteps = 8000
+        )
+        val day2Record = DailyStepEntity(
+            date = "2026-11-11",
+            steps = 200,
+            distanceMeters = 150f,
+            caloriesKcal = 10f,
+            activeDurationSeconds = 120L,
+            goalSteps = 8000
+        )
+
+        val dateFlow = kotlinx.coroutines.flow.MutableStateFlow("2026-11-10")
+        every { repository.getDailyRecordFlow("2026-11-10") } returns flowOf(day1Record)
+        every { repository.getDailyRecordFlow("2026-11-11") } returns flowOf(day2Record)
+
+        val viewModel = StepViewModel(repository, currentDateFlow = dateFlow)
+        val state1 = viewModel.uiState.first { it.todaySteps == 5000 }
+        assertEquals(5000, state1.todaySteps)
+        assertEquals("2026-11-10", state1.currentDate)
+
+        // Rollover to next day
+        dateFlow.value = "2026-11-11"
+        val state2 = viewModel.uiState.first { it.todaySteps == 200 }
+        assertEquals(200, state2.todaySteps)
+        assertEquals("2026-11-11", state2.currentDate)
+
+        coVerify { repository.initializeTodayRecord("2026-11-10") }
+        coVerify { repository.initializeTodayRecord("2026-11-11") }
+    }
+
+    @Test
     fun `Factory creates StepViewModel instance`() {
         val factory = StepViewModel.Factory(repository)
         val vm = factory.create(StepViewModel::class.java)

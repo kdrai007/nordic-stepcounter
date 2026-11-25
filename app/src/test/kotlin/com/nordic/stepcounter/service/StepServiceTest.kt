@@ -28,10 +28,16 @@ class StepServiceTest {
 
     private lateinit var application: Application
     private lateinit var preferences: ProfilePreferences
+    private var stepSensor: android.hardware.Sensor? = null
 
     @Before
     fun setUp() = runTest {
         application = ApplicationProvider.getApplicationContext()
+        val sensorManager = application.getSystemService(Context.SENSOR_SERVICE) as android.hardware.SensorManager
+        val shadowSensorManager = shadowOf(sensorManager)
+        val sensor = org.robolectric.shadows.ShadowSensor.newInstance(android.hardware.Sensor.TYPE_STEP_COUNTER)
+        stepSensor = sensor
+        shadowSensorManager.addSensor(sensor)
         preferences = ProfilePreferences(application)
         preferences.clear()
     }
@@ -39,6 +45,7 @@ class StepServiceTest {
     @After
     fun tearDown() = runTest {
         preferences.clear()
+        com.nordic.stepcounter.data.repository.StepRepository.resetInstance()
     }
 
     @Test
@@ -216,6 +223,47 @@ class StepServiceTest {
         assertNotNull(startedServiceIntent)
         assertEquals(StepCounterService::class.java.name, startedServiceIntent.component?.className)
         assertEquals(StepCounterService.ACTION_START, startedServiceIntent.action)
+    }
+
+    @Test
+    fun onStartCommand_stopsCleanlyWhenSensorNotAvailable() {
+        val shadowApp = shadowOf(application)
+        shadowApp.grantPermissions(Manifest.permission.ACTIVITY_RECOGNITION)
+        val sensorManager = application.getSystemService(Context.SENSOR_SERVICE) as android.hardware.SensorManager
+        val shadowSensorManager = shadowOf(sensorManager)
+        stepSensor?.let { shadowSensorManager.removeSensor(it) }
+
+        val controller = Robolectric.buildService(StepCounterService::class.java)
+        controller.create()
+        val service = controller.get()
+
+        val startCommandResult = service.onStartCommand(
+            Intent(application, StepCounterService::class.java).apply {
+                action = StepCounterService.ACTION_START
+            },
+            0,
+            1
+        )
+
+        assertEquals(Service.START_NOT_STICKY, startCommandResult)
+        assertTrue(shadowOf(service).isStoppedBySelf)
+        controller.destroy()
+    }
+
+    @Test
+    fun bootReceiver_doesNotStartServiceWhenSensorMissing() {
+        val shadowApp = shadowOf(application)
+        shadowApp.grantPermissions(Manifest.permission.ACTIVITY_RECOGNITION)
+        val sensorManager = application.getSystemService(Context.SENSOR_SERVICE) as android.hardware.SensorManager
+        val shadowSensorManager = shadowOf(sensorManager)
+        stepSensor?.let { shadowSensorManager.removeSensor(it) }
+
+        val receiver = BootReceiver()
+        val intent = Intent(Intent.ACTION_BOOT_COMPLETED)
+        receiver.onReceive(application, intent)
+
+        val startedServiceIntent = shadowApp.nextStartedService
+        assertNull(startedServiceIntent)
     }
 
     @Test

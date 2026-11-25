@@ -7,70 +7,92 @@ import androidx.lifecycle.viewModelScope
 import com.nordic.stepcounter.data.preferences.AppTheme
 import com.nordic.stepcounter.data.repository.StepRepository
 import com.nordic.stepcounter.domain.StepCalculationEngine
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 class StepViewModel(
     private val repository: StepRepository,
-    currentDateProvider: () -> String = { LocalDate.now().toString() }
+    currentDateFlow: Flow<String>
 ) : ViewModel() {
 
-    private val todayDate = currentDateProvider()
-    private val _isTrackingActive = MutableStateFlow(true)
-
-    val uiState: StateFlow<StepUiState> = combine(
-        repository.userProfileFlow,
-        repository.getDailyRecordFlow(todayDate),
-        repository.getRecentDailyRecordsFlow(30),
-        repository.getHourlyRecordsFlow(todayDate),
-        _isTrackingActive
-    ) { profile, todayRecord, recentList, hourlyList, isTrackingActive ->
-        val steps = todayRecord?.steps ?: 0
-        val dailyGoal = todayRecord?.goalSteps?.takeIf { it > 0 } ?: profile.dailyGoal
-        val stride = profile.effectiveStrideMeters
-        val progress = (steps.toFloat() / dailyGoal.coerceAtLeast(1)).coerceIn(0f, 1f)
-
-        StepUiState(
-            todaySteps = steps,
-            dailyGoal = dailyGoal,
-            goalProgress = progress,
-            distanceKm = StepCalculationEngine.calculateDistanceKm(steps, stride),
-            caloriesKcal = StepCalculationEngine.calculateCaloriesKcal(steps, profile.weightKg),
-            activeMinutes = StepCalculationEngine.calculateActiveMinutes(steps),
-            isPaused = profile.isPaused,
-            heightCm = profile.heightCm,
-            weightKg = profile.weightKg,
-            isMale = profile.isMale,
-            customStrideMeters = profile.customStrideLengthMeters,
-            effectiveStrideMeters = stride,
-            appTheme = profile.appTheme,
-            recentRecords = recentList,
-            weeklyRecords = recentList.take(7),
-            monthlyRecords = recentList.take(30),
-            hourlyToday = hourlyList,
-            userProfile = profile,
-            isTrackingActive = isTrackingActive
-        )
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = StepUiState()
+    constructor(
+        repository: StepRepository,
+        currentDateProvider: () -> String = { LocalDate.now().toString() }
+    ) : this(
+        repository = repository,
+        currentDateFlow = flow {
+            while (true) {
+                emit(currentDateProvider())
+                delay(10_000)
+            }
+        }.distinctUntilChanged()
     )
 
-    init {
-        viewModelScope.launch {
-            repository.initializeTodayRecord()
+    private val _isTrackingActive = MutableStateFlow(true)
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val uiState: StateFlow<StepUiState> = currentDateFlow
+        .onEach { todayDate ->
+            repository.initializeTodayRecord(todayDate)
         }
-    }
+        .flatMapLatest { todayDate ->
+            combine(
+                repository.userProfileFlow,
+                repository.getDailyRecordFlow(todayDate),
+                repository.getRecentDailyRecordsFlow(30),
+                repository.getHourlyRecordsFlow(todayDate),
+                _isTrackingActive
+            ) { profile, todayRecord, recentList, hourlyList, isTrackingActive ->
+                val steps = todayRecord?.steps ?: 0
+                val dailyGoal = todayRecord?.goalSteps?.takeIf { it > 0 } ?: profile.dailyGoal
+                val stride = profile.effectiveStrideMeters
+                val progress = (steps.toFloat() / dailyGoal.coerceAtLeast(1)).coerceIn(0f, 1f)
+
+                StepUiState(
+                    todaySteps = steps,
+                    dailyGoal = dailyGoal,
+                    goalProgress = progress,
+                    distanceKm = StepCalculationEngine.calculateDistanceKm(steps, stride),
+                    caloriesKcal = StepCalculationEngine.calculateCaloriesKcal(steps, profile.weightKg),
+                    activeMinutes = StepCalculationEngine.calculateActiveMinutes(steps),
+                    isPaused = profile.isPaused,
+                    heightCm = profile.heightCm,
+                    weightKg = profile.weightKg,
+                    isMale = profile.isMale,
+                    customStrideMeters = profile.customStrideLengthMeters,
+                    effectiveStrideMeters = stride,
+                    appTheme = profile.appTheme,
+                    recentRecords = recentList,
+                    weeklyRecords = recentList.take(7),
+                    monthlyRecords = recentList.take(30),
+                    hourlyToday = hourlyList,
+                    userProfile = profile,
+                    isTrackingActive = isTrackingActive,
+                    currentDate = todayDate
+                )
+            }
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = StepUiState()
+        )
 
     fun togglePause() {
         viewModelScope.launch {
-            val currentPaused = uiState.value.isPaused
+            val currentPaused = repository.userProfileFlow.first().isPaused
             repository.setPaused(!currentPaused)
         }
     }

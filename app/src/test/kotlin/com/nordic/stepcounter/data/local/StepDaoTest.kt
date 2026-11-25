@@ -143,4 +143,35 @@ class StepDaoTest {
         val totalSteps = stepDao.getTotalLifetimeSteps()
         assertEquals(20000L, totalSteps)
     }
+
+    @Test
+    fun testUpsertDailyAndHourlyAtomic() = runTest {
+        val daily = DailyStepEntity(
+            date = "2026-11-12",
+            steps = 2500,
+            distanceMeters = 1800f,
+            caloriesKcal = 120f,
+            activeDurationSeconds = 1500L,
+            goalSteps = 8000
+        )
+        val hourly = HourlyStepEntity(
+            date = "2026-11-12",
+            hour = 10,
+            steps = 2500
+        )
+
+        stepDao.upsertDailyAndHourly(daily, hourly)
+
+        val retrievedDaily = stepDao.getDailyRecordDirect("2026-11-12")
+        val retrievedHourly = stepDao.getHourlyRecordDirect("2026-11-12", 10)
+
+        assertEquals(daily, retrievedDaily)
+        assertEquals(hourly, retrievedHourly)
+
+        // Upsert with null hourly
+        val dailyUpdate = daily.copy(steps = 2600)
+        stepDao.upsertDailyAndHourly(dailyUpdate, null)
+        val updatedDaily = stepDao.getDailyRecordDirect("2026-11-12")
+        assertEquals(2600, updatedDaily?.steps)
+    }
 }

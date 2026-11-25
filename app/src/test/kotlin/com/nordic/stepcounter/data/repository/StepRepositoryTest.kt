@@ -190,4 +190,37 @@ class StepRepositoryTest {
         val updated = repository.getDailyRecordDirect(today)
         assertEquals(15000, updated?.goalSteps)
     }
+
+    @Test
+    fun updateDailyGoal_clampsInvalidAndExtremeGoals() = runTest {
+        // Clamps below 1,000 to 1,000
+        repository.updateDailyGoal(0)
+        assertEquals(1000, repository.userProfileFlow.first().dailyGoal)
+
+        repository.updateDailyGoal(-500)
+        assertEquals(1000, repository.userProfileFlow.first().dailyGoal)
+
+        // Clamps above 100,000 to 100,000
+        repository.updateDailyGoal(250000)
+        assertEquals(100000, repository.userProfileFlow.first().dailyGoal)
+
+        // Allows valid goal
+        repository.updateDailyGoal(10000)
+        assertEquals(10000, repository.userProfileFlow.first().dailyGoal)
+    }
+
+    @Test
+    fun processHardwareSensorReading_guardsAgainstIntegerOverflow() = runTest {
+        // Baseline 0
+        repository.processHardwareSensorReading(0L, "2026-11-10", 10)
+        // Steps close to Int.MAX_VALUE
+        val record = repository.processHardwareSensorReading(Int.MAX_VALUE.toLong() + 5000L, "2026-11-10", 10)
+        assertTrue(record.steps > 0)
+        assertEquals(Int.MAX_VALUE, record.steps)
+
+        // Additional reading with further steps
+        val nextRecord = repository.processHardwareSensorReading(Int.MAX_VALUE.toLong() + 5100L, "2026-11-10", 10)
+        assertTrue(nextRecord.steps > 0)
+        assertEquals(Int.MAX_VALUE, nextRecord.steps)
+    }
 }

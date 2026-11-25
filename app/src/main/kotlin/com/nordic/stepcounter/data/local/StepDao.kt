@@ -2,6 +2,7 @@ package com.nordic.stepcounter.data.local
 
 import androidx.room.Dao
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
@@ -27,6 +28,14 @@ interface StepDao {
 
     @Upsert
     suspend fun upsertHourly(entity: HourlyStepEntity)
+
+    @Transaction
+    suspend fun upsertDailyAndHourly(daily: DailyStepEntity, hourly: HourlyStepEntity?) {
+        upsertDaily(daily)
+        if (hourly != null) {
+            upsertHourly(hourly)
+        }
+    }
 
     @Query("UPDATE daily_steps SET goalSteps = :goal WHERE date = :date")
     suspend fun updateDailyGoal(date: String, goal: Int): Int

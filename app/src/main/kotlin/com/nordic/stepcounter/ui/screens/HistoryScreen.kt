@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -22,6 +23,7 @@ import com.nordic.stepcounter.ui.StepUiState
 import com.nordic.stepcounter.ui.components.MetricStatCard
 import com.nordic.stepcounter.ui.components.SwissBarChart
 import com.nordic.stepcounter.ui.theme.LocalStepPalette
+import java.time.LocalDate
 
 @Composable
 fun HistoryScreen(
@@ -29,12 +31,25 @@ fun HistoryScreen(
     modifier: Modifier = Modifier
 ) {
     val palette = LocalStepPalette.current
-    var selectedTab by remember { mutableIntStateOf(0) } // 0 = Day (24h), 1 = Week (7d), 2 = Month (30d)
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) } // 0 = Day (24h), 1 = Week (7d), 2 = Month (30d)
+
+    val recordsByDate = remember(state.recentRecords) {
+        state.recentRecords.associateBy { it.date }
+    }
+    val today = remember(state.currentDate) {
+        runCatching { LocalDate.parse(state.currentDate) }.getOrElse { LocalDate.now() }
+    }
 
     val chartValues = when (selectedTab) {
         0 -> (0..23).map { hour -> state.hourlyToday.firstOrNull { it.hour == hour }?.steps ?: 0 }
-        1 -> state.recentRecords.take(7).reversed().map { it.steps }
-        else -> state.recentRecords.take(30).reversed().map { it.steps }
+        1 -> (6 downTo 0).map { daysAgo ->
+            val dateKey = today.minusDays(daysAgo.toLong()).toString()
+            recordsByDate[dateKey]?.steps ?: 0
+        }
+        else -> (29 downTo 0).map { daysAgo ->
+            val dateKey = today.minusDays(daysAgo.toLong()).toString()
+            recordsByDate[dateKey]?.steps ?: 0
+        }
     }
 
     val bestDay = state.recentRecords.maxOfOrNull { it.steps } ?: state.todaySteps
@@ -67,9 +82,13 @@ fun HistoryScreen(
         }
 
         Spacer(modifier = Modifier.height(24.dp))
+        val chartMax = when (selectedTab) {
+            0 -> (chartValues.maxOrNull() ?: 0).coerceAtLeast(1000)
+            else -> maxOf(chartValues.maxOrNull() ?: 0, state.dailyGoal, 1000)
+        }
         SwissBarChart(
             values = chartValues,
-            maxValue = (chartValues.maxOrNull() ?: state.dailyGoal).coerceAtLeast(1000)
+            maxValue = chartMax
         )
 
         Spacer(modifier = Modifier.height(24.dp))

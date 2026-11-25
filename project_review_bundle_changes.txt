@@ -1,0 +1,3372 @@
+================================================================================
+CHANGED FILES CODEBASE DUMP FOR REVIEW: Nordic Step Counter
+Total Changed Files Included: 27
+Excluded: 'improvements' folder, binary files, internal markdown plans
+================================================================================
+
+GIT DIFF SUMMARY:
+  app/build.gradle.kts                               |   2 -
+   app/src/main/AndroidManifest.xml                   |   4 +-
+   .../kotlin/com/nordic/stepcounter/MainActivity.kt  |  75 ++++--
+   .../com/nordic/stepcounter/data/local/StepDao.kt   |   9 +
+   .../stepcounter/data/repository/StepRepository.kt  |  38 +--
+   .../com/nordic/stepcounter/service/BootReceiver.kt |   4 +-
+   .../stepcounter/service/StepCounterService.kt      |  51 +++-
+   .../stepcounter/service/StepSensorManager.kt       |  49 +++-
+   .../com/nordic/stepcounter/ui/StepUiState.kt       |   4 +-
+   .../com/nordic/stepcounter/ui/StepViewModel.kt     | 114 +++++----
+   .../stepcounter/ui/components/SwissBarChart.kt     |  10 +-
+   .../nordic/stepcounter/ui/screens/HistoryScreen.kt |  27 ++-
+   .../nordic/stepcounter/ui/screens/ProfileScreen.kt | 263 ++++++++++++++++++++-
+   .../nordic/stepcounter/ui/screens/TodayScreen.kt   |  55 +++++
+   .../com/nordic/stepcounter/ui/theme/Theme.kt       |  50 +++-
+   app/src/main/res/xml/backup_rules.xml              |  17 +-
+   app/src/main/res/xml/data_extraction_rules.xml     |  22 +-
+   .../nordic/stepcounter/data/local/StepDaoTest.kt   |  31 +++
+   .../data/repository/StepRepositoryTest.kt          |  28 +++
+   .../stepcounter/service/StepSensorManagerTest.kt   |  56 +++++
+   .../nordic/stepcounter/service/StepServiceTest.kt  |  48 ++++
+   .../com/nordic/stepcounter/ui/StepViewModelTest.kt |  38 +++
+   build.gradle.kts                                   |   1 -
+   gradle/libs.versions.toml                          |   2 -
+   24 files changed, 837 insertions(+), 161 deletions(-)
+
+================================================================================
+TABLE OF CONTENTS:
+ 1. app/build.gradle.kts
+ 2. app/src/main/AndroidManifest.xml
+ 3. app/src/main/kotlin/com/nordic/stepcounter/MainActivity.kt
+ 4. app/src/main/kotlin/com/nordic/stepcounter/data/local/StepDao.kt
+ 5. app/src/main/kotlin/com/nordic/stepcounter/data/repository/StepRepository.kt
+ 6. app/src/main/kotlin/com/nordic/stepcounter/service/BootReceiver.kt
+ 7. app/src/main/kotlin/com/nordic/stepcounter/service/StepCounterService.kt
+ 8. app/src/main/kotlin/com/nordic/stepcounter/service/StepSensorManager.kt
+ 9. app/src/main/kotlin/com/nordic/stepcounter/ui/StepUiState.kt
+10. app/src/main/kotlin/com/nordic/stepcounter/ui/StepViewModel.kt
+11. app/src/main/kotlin/com/nordic/stepcounter/ui/components/SwissBarChart.kt
+12. app/src/main/kotlin/com/nordic/stepcounter/ui/screens/HistoryScreen.kt
+13. app/src/main/kotlin/com/nordic/stepcounter/ui/screens/ProfileScreen.kt
+14. app/src/main/kotlin/com/nordic/stepcounter/ui/screens/TodayScreen.kt
+15. app/src/main/kotlin/com/nordic/stepcounter/ui/theme/Theme.kt
+16. app/src/main/res/drawable/ic_tab_history.xml
+17. app/src/main/res/drawable/ic_tab_profile.xml
+18. app/src/main/res/drawable/ic_tab_today.xml
+19. app/src/main/res/xml/backup_rules.xml
+20. app/src/main/res/xml/data_extraction_rules.xml
+21. app/src/test/kotlin/com/nordic/stepcounter/data/local/StepDaoTest.kt
+22. app/src/test/kotlin/com/nordic/stepcounter/data/repository/StepRepositoryTest.kt
+23. app/src/test/kotlin/com/nordic/stepcounter/service/StepSensorManagerTest.kt
+24. app/src/test/kotlin/com/nordic/stepcounter/service/StepServiceTest.kt
+25. app/src/test/kotlin/com/nordic/stepcounter/ui/StepViewModelTest.kt
+26. build.gradle.kts
+27. gradle/libs.versions.toml
+
+================================================================================
+
+
+================================================================================
+FILE [1/27]: app/build.gradle.kts
+================================================================================
+
+plugins {
+  alias(libs.plugins.android.application)
+  alias(libs.plugins.compose.compiler)
+  alias(libs.plugins.ksp)
+}
+
+android {
+  namespace = "com.nordic.stepcounter"
+  compileSdk = 35
+
+  defaultConfig {
+    applicationId = "com.nordic.stepcounter"
+    minSdk = 26
+    targetSdk = 35
+    versionCode = 1
+    versionName = "1.0.0"
+    testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+  }
+
+  buildTypes {
+    release {
+      isMinifyEnabled = true
+      isShrinkResources = true
+      proguardFiles(
+        getDefaultProguardFile("proguard-android-optimize.txt"),
+        "proguard-rules.pro"
+      )
+    }
+  }
+  compileOptions {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+  }
+  buildFeatures {
+    compose = true
+    aidl = false
+    buildConfig = false
+    shaders = false
+  }
+
+  testOptions {
+    unitTests.isIncludeAndroidResources = true
+  }
+
+  packaging {
+    resources {
+      excludes += "/META-INF/{AL2.0,LGPL2.1}"
+    }
+  }
+}
+
+kotlin {
+  jvmToolchain(21)
+}
+
+dependencies {
+  val composeBom = platform(libs.androidx.compose.bom)
+  implementation(composeBom)
+  androidTestImplementation(composeBom)
+
+  // Core Android dependencies
+  implementation(libs.androidx.core.ktx)
+  implementation(libs.androidx.lifecycle.runtime.ktx)
+  implementation(libs.androidx.activity.compose)
+
+  // Arch Components
+  implementation(libs.androidx.lifecycle.runtime.compose)
+  implementation(libs.androidx.lifecycle.viewmodel.compose)
+
+  // Compose
+  implementation(libs.androidx.compose.ui)
+  implementation(libs.androidx.compose.ui.graphics)
+  implementation(libs.androidx.compose.ui.tooling.preview)
+  implementation(libs.androidx.compose.material3)
+
+  // Room Database
+  implementation(libs.androidx.room.runtime)
+  implementation(libs.androidx.room.ktx)
+  ksp(libs.androidx.room.compiler)
+
+  // DataStore Preferences
+  implementation(libs.androidx.datastore.preferences)
+
+  // Coroutines
+  implementation(libs.kotlinx.coroutines.android)
+
+  // Tooling
+  debugImplementation(libs.androidx.compose.ui.tooling)
+
+  // Unit Testing
+  testImplementation(libs.junit)
+  testImplementation(libs.androidx.test.core.ktx)
+  testImplementation(libs.kotlinx.coroutines.test)
+  testImplementation(libs.androidx.room.testing)
+  testImplementation(libs.mockk)
+  testImplementation(libs.robolectric)
+
+  // Instrumented tests
+  androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+  debugImplementation(libs.androidx.compose.ui.test.manifest)
+  androidTestImplementation(libs.androidx.test.core)
+  androidTestImplementation(libs.androidx.test.ext.junit)
+  androidTestImplementation(libs.androidx.test.runner)
+  androidTestImplementation(libs.androidx.test.espresso.core)
+}
+
+
+================================================================================
+FILE [2/27]: app/src/main/AndroidManifest.xml
+================================================================================
+
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-feature
+        android:name="android.hardware.sensor.stepcounter"
+        android:required="true" />
+
+    <!-- Health Foreground Service (Android 14+) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
+
+    <!-- Activity Recognition (Android 10+) -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+
+    <!-- Boot completed receiver to restore tracking -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Notification permission (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application
+        android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.NordicStepCounter">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".service.StepCounterService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="health" />
+
+        <receiver
+            android:name=".service.BootReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+    </application>
+
+</manifest>
+
+
+================================================================================
+FILE [3/27]: app/src/main/kotlin/com/nordic/stepcounter/MainActivity.kt
+================================================================================
+
+package com.nordic.stepcounter
+
+import android.Manifest
+import android.content.Intent
+import android.os.Build
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nordic.stepcounter.service.StepCounterService
+import com.nordic.stepcounter.ui.StepViewModel
+import com.nordic.stepcounter.ui.screens.HistoryScreen
+import com.nordic.stepcounter.ui.screens.ProfileScreen
+import com.nordic.stepcounter.ui.screens.TodayScreen
+import com.nordic.stepcounter.ui.theme.LocalStepPalette
+import com.nordic.stepcounter.ui.theme.NordicStepTheme
+
+class MainActivity : ComponentActivity() {
+
+    private val viewModel: StepViewModel by viewModels {
+        StepViewModel.provideFactory(applicationContext)
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+
+        setContent {
+            val state by viewModel.uiState.collectAsStateWithLifecycle()
+            var currentTab by rememberSaveable { mutableIntStateOf(0) }
+            var hasPermission by remember {
+                mutableStateOf(StepCounterService.hasActivityRecognitionPermission(this@MainActivity))
+            }
+            val hasStepSensor = remember {
+                StepCounterService.hasStepCounterSensor(this@MainActivity)
+            }
+
+            val permissionLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.RequestMultiplePermissions()
+            ) {
+                hasPermission = StepCounterService.hasActivityRecognitionPermission(this@MainActivity)
+                if (hasPermission) {
+                    startStepServiceIfPermitted()
+                }
+            }
+
+            val requestPermissionsAction: () -> Unit = {
+                val permissionsToRequest = buildList {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        add(Manifest.permission.ACTIVITY_RECOGNITION)
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        add(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                }
+                if (permissionsToRequest.isNotEmpty()) {
+                    permissionLauncher.launch(permissionsToRequest.toTypedArray())
+                }
+            }
+
+            LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+                hasPermission = StepCounterService.hasActivityRecognitionPermission(this@MainActivity)
+                if (hasPermission) {
+                    startStepServiceIfPermitted()
+                }
+            }
+
+            LaunchedEffect(Unit) {
+                if (!hasPermission) {
+                    requestPermissionsAction()
+                } else {
+                    startStepServiceIfPermitted()
+                }
+            }
+
+            NordicStepTheme(appTheme = state.appTheme) {
+                val palette = LocalStepPalette.current
+                Scaffold(
+                    containerColor = palette.background,
+                    bottomBar = {
+                        NavigationBar(containerColor = palette.surface) {
+                            NavigationBarItem(
+                                selected = currentTab == 0,
+                                onClick = { currentTab = 0 },
+                                icon = { Icon(painterResource(R.drawable.ic_tab_today), contentDescription = "Today") },
+                                label = { Text("TODAY") }
+                            )
+                            NavigationBarItem(
+                                selected = currentTab == 1,
+                                onClick = { currentTab = 1 },
+                                icon = { Icon(painterResource(R.drawable.ic_tab_history), contentDescription = "History") },
+                                label = { Text("HISTORY") }
+                            )
+                            NavigationBarItem(
+                                selected = currentTab == 2,
+                                onClick = { currentTab = 2 },
+                                icon = { Icon(painterResource(R.drawable.ic_tab_profile), contentDescription = "Profile") },
+                                label = { Text("PROFILE") }
+                            )
+                        }
+                    }
+                ) { innerPadding ->
+                    when (currentTab) {
+                        0 -> TodayScreen(
+                            state = state,
+                            onTogglePause = {
+                                if (hasPermission && hasStepSensor) {
+                                    val intent = Intent(this@MainActivity, StepCounterService::class.java).apply {
+                                        action = StepCounterService.ACTION_TOGGLE_PAUSE
+                                    }
+                                    ContextCompat.startForegroundService(this@MainActivity, intent)
+                                } else {
+                                    viewModel.togglePause()
+                                }
+                            },
+                            hasPermission = hasPermission,
+                            hasStepSensor = hasStepSensor,
+                            onRequestPermission = requestPermissionsAction,
+                            modifier = Modifier.padding(innerPadding)
+                        )
+                        1 -> HistoryScreen(
+                            state = state,
+                            modifier = Modifier.padding(innerPadding)
+                        )
+                        2 -> ProfileScreen(
+                            state = state,
+                            onSelectGoal = viewModel::updateGoal,
+                            onSelectTheme = viewModel::selectTheme,
+                            onUpdatePhysicalProfile = viewModel::updatePhysicalProfile,
+                            modifier = Modifier.padding(innerPadding)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun startStepServiceIfPermitted() {
+        if (StepCounterService.hasActivityRecognitionPermission(this) &&
+            StepCounterService.hasStepCounterSensor(this)
+        ) {
+            val intent = Intent(this, StepCounterService::class.java)
+            ContextCompat.startForegroundService(this, intent)
+        }
+    }
+}
+
+
+================================================================================
+FILE [4/27]: app/src/main/kotlin/com/nordic/stepcounter/data/local/StepDao.kt
+================================================================================
+
+package com.nordic.stepcounter.data.local
+
+import androidx.room.Dao
+import androidx.room.Query
+import androidx.room.Transaction
+import androidx.room.Upsert
+import kotlinx.coroutines.flow.Flow
+
+@Dao
+interface StepDao {
+    @Query("SELECT * FROM daily_steps WHERE date = :date LIMIT 1")
+    fun getDailyRecord(date: String): Flow<DailyStepEntity?>
+
+    @Query("SELECT * FROM daily_steps WHERE date = :date LIMIT 1")
+    suspend fun getDailyRecordDirect(date: String): DailyStepEntity?
+
+    @Query("SELECT * FROM daily_steps ORDER BY date DESC LIMIT :limit")
+    fun getRecentDailyRecords(limit: Int): Flow<List<DailyStepEntity>>
+
+    @Query("SELECT * FROM hourly_steps WHERE date = :date ORDER BY hour ASC")
+    fun getHourlyRecordsForDate(date: String): Flow<List<HourlyStepEntity>>
+
+    @Query("SELECT * FROM hourly_steps WHERE date = :date AND hour = :hour LIMIT 1")
+    suspend fun getHourlyRecordDirect(date: String, hour: Int): HourlyStepEntity?
+
+    @Upsert
+    suspend fun upsertDaily(entity: DailyStepEntity)
+
+    @Upsert
+    suspend fun upsertHourly(entity: HourlyStepEntity)
+
+    @Transaction
+    suspend fun upsertDailyAndHourly(daily: DailyStepEntity, hourly: HourlyStepEntity?) {
+        upsertDaily(daily)
+        if (hourly != null) {
+            upsertHourly(hourly)
+        }
+    }
+
+    @Query("UPDATE daily_steps SET goalSteps = :goal WHERE date = :date")
+    suspend fun updateDailyGoal(date: String, goal: Int): Int
+
+    @Query("SELECT SUM(steps) FROM daily_steps")
+    suspend fun getTotalLifetimeSteps(): Long?
+}
+
+
+================================================================================
+FILE [5/27]: app/src/main/kotlin/com/nordic/stepcounter/data/repository/StepRepository.kt
+================================================================================
+
+package com.nordic.stepcounter.data.repository
+
+import android.content.Context
+import com.nordic.stepcounter.data.local.DailyStepEntity
+import com.nordic.stepcounter.data.local.HourlyStepEntity
+import com.nordic.stepcounter.data.local.StepDao
+import com.nordic.stepcounter.data.local.StepDatabase
+import com.nordic.stepcounter.data.preferences.AppTheme
+import com.nordic.stepcounter.data.preferences.ProfilePreferences
+import com.nordic.stepcounter.data.preferences.UserProfile
+import com.nordic.stepcounter.domain.StepCalculationEngine
+import com.nordic.stepcounter.domain.StepDeltaProcessor
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.time.LocalDate
+import java.time.LocalTime
+
+class StepRepository(
+    private val stepDao: StepDao,
+    private val preferences: ProfilePreferences
+) {
+    private val sensorMutex = Mutex()
+
+    val userProfileFlow: Flow<UserProfile> = preferences.userProfileFlow
+    val isPausedFlow: Flow<Boolean> = preferences.isPausedFlow
+    val dailyGoalFlow: Flow<Int> = preferences.dailyGoalFlow
+    val appThemeFlow: Flow<AppTheme> = preferences.appThemeFlow
+
+    val todayStepRecordFlow: Flow<DailyStepEntity?>
+        get() = getDailyRecordFlow(LocalDate.now().toString())
+
+    fun getLast7DaysRecordsFlow(): Flow<List<DailyStepEntity>> =
+        getRecentDailyRecordsFlow(7)
+
+    fun getLast30DaysRecordsFlow(): Flow<List<DailyStepEntity>> =
+        getRecentDailyRecordsFlow(30)
+
+    fun getHourlyRecordsForTodayFlow(): Flow<List<HourlyStepEntity>> =
+        getHourlyRecordsFlow(LocalDate.now().toString())
+
+    fun getDailyRecordFlow(date: String): Flow<DailyStepEntity?> =
+        stepDao.getDailyRecord(date)
+
+    suspend fun getDailyRecordDirect(date: String): DailyStepEntity? =
+        stepDao.getDailyRecordDirect(date)
+
+    fun getRecentDailyRecordsFlow(limit: Int): Flow<List<DailyStepEntity>> =
+        stepDao.getRecentDailyRecords(limit)
+
+    fun getHourlyRecordsFlow(date: String): Flow<List<HourlyStepEntity>> =
+        stepDao.getHourlyRecordsForDate(date)
+
+    suspend fun getTotalLifetimeSteps(): Long =
+        stepDao.getTotalLifetimeSteps() ?: 0L
+
+    /**
+     * Initializes a record for [date] if one does not already exist.
+     * Ensures midnight rollover or new day start has a valid 0-step baseline.
+     */
+    suspend fun initializeTodayRecord(
+        date: String = LocalDate.now().toString()
+    ): DailyStepEntity = sensorMutex.withLock {
+        val existing = stepDao.getDailyRecordDirect(date)
+        if (existing != null) return@withLock existing
+
+        val profile = preferences.userProfileFlow.first()
+        val initial = DailyStepEntity(
+            date = date,
+            steps = 0,
+            distanceMeters = 0f,
+            caloriesKcal = 0f,
+            activeDurationSeconds = 0L,
+            goalSteps = profile.dailyGoal
+        )
+        stepDao.upsertDaily(initial)
+        return@withLock initial
+    }
+
+    /**
+     * Ingests a raw hardware Sensor.TYPE_STEP_COUNTER reading.
+     * Handles delta calculation, midnight rollover, pause state, and updates
+     * Room daily & hourly step records alongside DataStore sensor baseline.
+     */
+    suspend fun processHardwareSensorReading(
+        rawSensorSteps: Long,
+        date: String = LocalDate.now().toString(),
+        hour: Int = LocalTime.now().hour
+    ): DailyStepEntity = sensorMutex.withLock {
+        val profile = preferences.userProfileFlow.first()
+
+        val deltaResult = StepDeltaProcessor.computeDelta(
+            currentSensorSteps = rawSensorSteps,
+            lastSensorSteps = profile.lastSensorStepValue,
+            isPaused = profile.isPaused
+        )
+
+        // Advance baseline and record latest date
+        preferences.updateLastSensorReading(
+            steps = deltaResult.newBaselineSensorSteps,
+            date = date
+        )
+
+        val existingDaily = stepDao.getDailyRecordDirect(date)
+        val baseSteps = existingDaily?.steps ?: 0
+        val newTotalSteps = (baseSteps.toLong() + deltaResult.stepsToAdd)
+            .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+
+        val strideMeters = profile.effectiveStrideLengthMeters
+        val distanceMeters = StepCalculationEngine.calculateDistanceKm(newTotalSteps, strideMeters) * 1000f
+        val caloriesKcal = StepCalculationEngine.calculateCaloriesKcal(newTotalSteps, profile.weightKg)
+        val activeDurationSeconds = StepCalculationEngine.calculateActiveMinutes(newTotalSteps) * 60L
+
+        val updatedDaily = DailyStepEntity(
+            date = date,
+            steps = newTotalSteps,
+            distanceMeters = distanceMeters,
+            caloriesKcal = caloriesKcal,
+            activeDurationSeconds = activeDurationSeconds,
+            goalSteps = profile.dailyGoal
+        )
+
+        val hourlyEntity = if (deltaResult.stepsToAdd > 0) {
+            val existingHourly = stepDao.getHourlyRecordDirect(date, hour)
+            val newHourlySteps = ((existingHourly?.steps ?: 0).toLong() + deltaResult.stepsToAdd)
+                .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+            HourlyStepEntity(
+                date = date,
+                hour = hour,
+                steps = newHourlySteps
+            )
+        } else {
+            null
+        }
+
+        stepDao.upsertDailyAndHourly(updatedDaily, hourlyEntity)
+
+        return@withLock updatedDaily
+    }
+
+    suspend fun setPaused(isPaused: Boolean) {
+        preferences.setPaused(isPaused)
+    }
+
+    suspend fun updateDailyGoal(goal: Int) = sensorMutex.withLock {
+        val safeGoal = goal.coerceIn(1_000, 100_000)
+        preferences.updateDailyGoal(safeGoal)
+        val today = LocalDate.now().toString()
+        val affected = stepDao.updateDailyGoal(today, safeGoal)
+        if (affected == 0) {
+            val existing = stepDao.getDailyRecordDirect(today)
+            if (existing == null) {
+                stepDao.upsertDaily(
+                    DailyStepEntity(
+                        date = today,
+                        steps = 0,
+                        distanceMeters = 0f,
+                        caloriesKcal = 0f,
+                        activeDurationSeconds = 0L,
+                        goalSteps = safeGoal
+                    )
+                )
+            }
+        }
+    }
+
+    suspend fun updatePhysicalProfile(
+        heightCm: Float,
+        weightKg: Float,
+        isMale: Boolean,
+        customStrideLengthMeters: Float = 0.0f
+    ) {
+        preferences.updatePhysicalProfile(heightCm, weightKg, isMale, customStrideLengthMeters)
+    }
+
+    suspend fun updateAppTheme(theme: AppTheme) {
+        preferences.updateAppTheme(theme)
+    }
+
+    companion object {
+        @Volatile
+        private var INSTANCE: StepRepository? = null
+
+        fun getInstance(context: Context): StepRepository {
+            return INSTANCE ?: synchronized(this) {
+                INSTANCE ?: StepRepository(
+                    StepDatabase.getInstance(context).stepDao(),
+                    ProfilePreferences.getInstance(context)
+                ).also { INSTANCE = it }
+            }
+        }
+
+        fun getInstance(stepDao: StepDao, preferences: ProfilePreferences): StepRepository {
+            return INSTANCE ?: synchronized(this) {
+                INSTANCE ?: StepRepository(stepDao, preferences).also { INSTANCE = it }
+            }
+        }
+
+        fun resetInstance() {
+            synchronized(this) {
+                INSTANCE = null
+            }
+        }
+    }
+}
+
+
+================================================================================
+FILE [6/27]: app/src/main/kotlin/com/nordic/stepcounter/service/BootReceiver.kt
+================================================================================
+
+package com.nordic.stepcounter.service
+
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import androidx.core.content.ContextCompat
+
+/**
+ * BroadcastReceiver responsible for restarting the [StepCounterService] upon device reboot
+ * or app package update. Verifies ACTIVITY_RECOGNITION runtime permission before launching
+ * the Foreground Service to comply with Android 14/15 Foreground Service launch restrictions.
+ */
+class BootReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent?) {
+        val action = intent?.action ?: return
+        if (action == Intent.ACTION_BOOT_COMPLETED || action == Intent.ACTION_MY_PACKAGE_REPLACED) {
+            if (StepCounterService.hasActivityRecognitionPermission(context) &&
+                StepCounterService.hasStepCounterSensor(context)
+            ) {
+                val serviceIntent = Intent(context, StepCounterService::class.java).apply {
+                    this.action = StepCounterService.ACTION_START
+                }
+                ContextCompat.startForegroundService(context, serviceIntent)
+            }
+        }
+    }
+}
+
+
+================================================================================
+FILE [7/27]: app/src/main/kotlin/com/nordic/stepcounter/service/StepCounterService.kt
+================================================================================
+
+package com.nordic.stepcounter.service
+
+import android.Manifest
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.app.Service
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
+import android.os.Build
+import android.os.IBinder
+import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
+import androidx.core.content.ContextCompat
+import com.nordic.stepcounter.MainActivity
+import com.nordic.stepcounter.R
+import com.nordic.stepcounter.data.repository.StepRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
+import java.time.LocalDate
+
+class StepCounterService : Service() {
+
+    companion object {
+        const val CHANNEL_ID = "step_counter_channel"
+        const val NOTIFICATION_ID = 1001
+
+        const val ACTION_START = "com.nordic.stepcounter.ACTION_START"
+        const val ACTION_PAUSE = "com.nordic.stepcounter.ACTION_PAUSE"
+        const val ACTION_RESUME = "com.nordic.stepcounter.ACTION_RESUME"
+        const val ACTION_STOP = "com.nordic.stepcounter.ACTION_STOP"
+        const val ACTION_TOGGLE_PAUSE = "com.nordic.stepcounter.ACTION_TOGGLE_PAUSE"
+
+        fun hasActivityRecognitionPermission(context: Context): Boolean {
+            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.ACTIVITY_RECOGNITION
+                ) == PackageManager.PERMISSION_GRANTED
+            } else {
+                true
+            }
+        }
+
+        fun hasStepCounterSensor(context: Context): Boolean {
+            val sm = context.getSystemService(Context.SENSOR_SERVICE) as? android.hardware.SensorManager
+            return sm?.getDefaultSensor(android.hardware.Sensor.TYPE_STEP_COUNTER) != null
+        }
+    }
+
+    internal var serviceScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    internal lateinit var repository: StepRepository
+    internal lateinit var sensorManager: StepSensorManager
+    private var isForegroundStarted = false
+
+    override fun onCreate() {
+        super.onCreate()
+        if (!hasActivityRecognitionPermission(this)) {
+            stopSelf()
+            return
+        }
+
+        repository = StepRepository.getInstance(this)
+
+        createNotificationChannel()
+
+        sensorManager = StepSensorManager(this) { rawSteps ->
+            serviceScope.launch {
+                val updatedDaily = repository.processHardwareSensorReading(rawSteps)
+                val profile = repository.userProfileFlow.first()
+                updateNotification(updatedDaily.steps, updatedDaily.goalSteps, profile.isPaused)
+            }
+        }
+
+        serviceScope.launch {
+            repository.userProfileFlow
+                .map { it.isPaused to it.dailyGoal }
+                .distinctUntilChanged()
+                .collect {
+                    if (isForegroundStarted) {
+                        updateNotificationForCurrentState()
+                    }
+                }
+        }
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (!hasActivityRecognitionPermission(this)) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
+        if (intent?.action != ACTION_STOP && !isForegroundStarted) {
+            if (!startTracking()) {
+                return START_NOT_STICKY
+            }
+        }
+
+        when (intent?.action) {
+            ACTION_STOP -> {
+                handleStop()
+                return START_NOT_STICKY
+            }
+            ACTION_PAUSE -> {
+                serviceScope.launch {
+                    if (::sensorManager.isInitialized) {
+                        sensorManager.flushAndWait()
+                    }
+                    repository.setPaused(true)
+                    updateNotificationForCurrentState()
+                }
+            }
+            ACTION_RESUME -> {
+                serviceScope.launch {
+                    if (::sensorManager.isInitialized) {
+                        sensorManager.flushAndWait()
+                    }
+                    repository.setPaused(false)
+                    updateNotificationForCurrentState()
+                }
+            }
+            ACTION_TOGGLE_PAUSE -> {
+                serviceScope.launch {
+                    if (::sensorManager.isInitialized) {
+                        sensorManager.flushAndWait()
+                    }
+                    val profile = repository.userProfileFlow.first()
+                    val newPaused = !profile.isPaused
+                    repository.setPaused(newPaused)
+                    updateNotificationForCurrentState()
+                }
+            }
+            else -> {
+                // Foreground started above if action != ACTION_STOP
+            }
+        }
+
+        return START_STICKY
+    }
+
+    private fun startTracking(): Boolean {
+        if (!isForegroundStarted) {
+            val initialNotification = buildNotification(steps = 0, goal = 6000, isPaused = false)
+            promoteToForeground(initialNotification)
+            isForegroundStarted = true
+        }
+
+        if (!sensorManager.isSensorAvailable || !sensorManager.startListening()) {
+            handleStop()
+            return false
+        }
+
+        serviceScope.launch {
+            repository.initializeTodayRecord()
+            updateNotificationForCurrentState()
+        }
+        return true
+    }
+
+    private fun handleStop() {
+        if (::sensorManager.isInitialized) {
+            sensorManager.stopListening()
+        }
+        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+        isForegroundStarted = false
+        stopSelf()
+    }
+
+    private fun promoteToForeground(notification: Notification) {
+        val serviceType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH
+        } else {
+            0
+        }
+        ServiceCompat.startForeground(
+            this,
+            NOTIFICATION_ID,
+            notification,
+            serviceType
+        )
+    }
+
+    internal suspend fun updateNotificationForCurrentState() {
+        val today = LocalDate.now().toString()
+        val todayRecord = repository.getDailyRecordDirect(today)
+        val profile = repository.userProfileFlow.first()
+        val steps = todayRecord?.steps ?: 0
+        val goal = profile.dailyGoal
+        val isPaused = profile.isPaused
+        updateNotification(steps, goal, isPaused)
+    }
+
+    internal fun updateNotification(steps: Int, goal: Int, isPaused: Boolean) {
+        val notificationManager = getSystemService(NotificationManager::class.java)
+        notificationManager?.notify(NOTIFICATION_ID, buildNotification(steps, goal, isPaused))
+    }
+
+    internal fun buildNotification(steps: Int, goal: Int, isPaused: Boolean): Notification {
+        val openAppIntent = PendingIntent.getActivity(
+            this,
+            0,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val actionIntent = Intent(this, StepCounterService::class.java).apply {
+            action = if (isPaused) ACTION_RESUME else ACTION_PAUSE
+        }
+        val actionPendingIntent = PendingIntent.getService(
+            this,
+            1,
+            actionIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val percent = if (goal > 0) ((steps * 100) / goal).coerceAtMost(100) else 0
+        val statusText = if (isPaused) "Paused • $percent% of goal" else "$percent% of $goal goal"
+        val actionLabel = if (isPaused) "Resume" else "Pause"
+
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_tab_today)
+            .setContentTitle("%,d STEPS".format(steps))
+            .setContentText(statusText)
+            .setOngoing(true)
+            .setSilent(true)
+            .setContentIntent(openAppIntent)
+            .addAction(0, actionLabel, actionPendingIntent)
+            .build()
+    }
+
+    private fun createNotificationChannel() {
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            "Step Tracking Service",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Shows live daily step count and goal progress"
+            setShowBadge(false)
+        }
+        val notificationManager = getSystemService(NotificationManager::class.java)
+        notificationManager?.createNotificationChannel(channel)
+    }
+
+    override fun onDestroy() {
+        if (::sensorManager.isInitialized) {
+            sensorManager.stopListening()
+        }
+        serviceScope.cancel()
+        super.onDestroy()
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+}
+
+
+================================================================================
+FILE [8/27]: app/src/main/kotlin/com/nordic/stepcounter/service/StepSensorManager.kt
+================================================================================
+
+package com.nordic.stepcounter.service
+
+import android.content.Context
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener2
+import android.hardware.SensorManager
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
+
+/**
+ * Low-power hardware step counter manager.
+ * Exclusively uses [Sensor.TYPE_STEP_COUNTER] (sensor type 19) with 60-second hardware
+ * FIFO batching to minimize application and CPU wakeups.
+ */
+class StepSensorManager(
+    private val sensorManager: SensorManager?,
+    private val onStepCountChanged: ((Long) -> Unit)? = null
+) : SensorEventListener2 {
+
+    constructor(
+        context: Context,
+        onStepCountChanged: ((Long) -> Unit)? = null
+    ) : this(
+        context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager,
+        onStepCountChanged
+    )
+
+    private val stepCounterSensor: Sensor? =
+        sensorManager?.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
+
+    private val _stepEvents = MutableSharedFlow<Long>(
+        replay = 1,
+        extraBufferCapacity = 64,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val stepEvents: SharedFlow<Long> = _stepEvents.asSharedFlow()
+
+    val isSensorAvailable: Boolean
+        get() = stepCounterSensor != null
+
+    private var isListening = false
+    private val flushMutex = Mutex()
+    private var flushDeferred: CompletableDeferred<Unit>? = null
+
+    /**
+     * Registers the hardware step counter listener with 60-second report latency.
+     * Returns true if registered successfully, false otherwise.
+     */
+    fun startListening(): Boolean {
+        if (isListening) return true
+        val sensor = stepCounterSensor ?: return false
+        val success = sensorManager?.registerListener(
+            this,
+            sensor,
+            SensorManager.SENSOR_DELAY_NORMAL,
+            BATCH_LATENCY_US
+        ) ?: false
+        if (success) {
+            isListening = true
+        }
+        return success
+    }
+
+    /**
+     * Unregisters the sensor listener.
+     */
+    fun stopListening() {
+        sensorManager?.unregisterListener(this)
+        isListening = false
+    }
+
+    /**
+     * Flushes the hardware sensor FIFO buffer to immediately process batched steps.
+     * Returns true if flush was initiated, false otherwise.
+     */
+    fun flush(): Boolean {
+        return sensorManager?.flush(this) ?: false
+    }
+
+    /**
+     * Flushes the hardware sensor FIFO buffer and suspends until [onFlushCompleted] is invoked
+     * or [timeoutMs] elapses.
+     */
+    suspend fun flushAndWait(timeoutMs: Long = 500L): Boolean = flushMutex.withLock {
+        val deferred = CompletableDeferred<Unit>()
+        flushDeferred = deferred
+        val initiated = sensorManager?.flush(this) ?: false
+        if (initiated) {
+            withTimeoutOrNull(timeoutMs) {
+                deferred.await()
+            }
+        }
+        flushDeferred = null
+        initiated
+    }
+
+    override fun onFlushCompleted(sensor: Sensor?) {
+        flushDeferred?.complete(Unit)
+    }
+
+    override fun onSensorChanged(event: SensorEvent?) {
+        if (event == null) return
+        if (event.sensor?.type == Sensor.TYPE_STEP_COUNTER) {
+            val totalStepsSinceBoot = event.values.getOrNull(0)?.toLong() ?: return
+            onStepCountChanged?.invoke(totalStepsSinceBoot)
+            _stepEvents.tryEmit(totalStepsSinceBoot)
+        }
+    }
+
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
+        // Step counter accuracy does not affect cumulative counting
+    }
+
+    companion object {
+        const val BATCH_LATENCY_US = 60_000_000 // 60 seconds hardware batching latency
+    }
+}
+
+
+================================================================================
+FILE [9/27]: app/src/main/kotlin/com/nordic/stepcounter/ui/StepUiState.kt
+================================================================================
+
+package com.nordic.stepcounter.ui
+
+import com.nordic.stepcounter.data.local.DailyStepEntity
+import com.nordic.stepcounter.data.local.HourlyStepEntity
+import com.nordic.stepcounter.data.preferences.AppTheme
+import com.nordic.stepcounter.data.preferences.UserProfile
+import java.time.LocalDate
+
+data class StepUiState(
+    val todaySteps: Int = 0,
+    val dailyGoal: Int = 6000,
+    val goalProgress: Float = 0f,
+    val distanceKm: Float = 0f,
+    val caloriesKcal: Float = 0f,
+    val activeMinutes: Int = 0,
+    val isPaused: Boolean = false,
+    val heightCm: Float = 175f,
+    val weightKg: Float = 70f,
+    val isMale: Boolean = true,
+    val customStrideMeters: Float = 0f,
+    val effectiveStrideMeters: Float = 0.72f,
+    val appTheme: AppTheme = AppTheme.NORDIC_DARK,
+    val recentRecords: List<DailyStepEntity> = emptyList(),
+    val weeklyRecords: List<DailyStepEntity> = emptyList(),
+    val monthlyRecords: List<DailyStepEntity> = emptyList(),
+    val hourlyToday: List<HourlyStepEntity> = emptyList(),
+    val userProfile: UserProfile = UserProfile(),
+    val isTrackingActive: Boolean = true,
+    val currentDate: String = LocalDate.now().toString()
+) {
+    val currentTheme: AppTheme get() = appTheme
+}
+
+
+================================================================================
+FILE [10/27]: app/src/main/kotlin/com/nordic/stepcounter/ui/StepViewModel.kt
+================================================================================
+
+package com.nordic.stepcounter.ui
+
+import android.content.Context
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
+import com.nordic.stepcounter.data.preferences.AppTheme
+import com.nordic.stepcounter.data.repository.StepRepository
+import com.nordic.stepcounter.domain.StepCalculationEngine
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import java.time.LocalDate
+
+class StepViewModel(
+    private val repository: StepRepository,
+    currentDateFlow: Flow<String>
+) : ViewModel() {
+
+    constructor(
+        repository: StepRepository,
+        currentDateProvider: () -> String = { LocalDate.now().toString() }
+    ) : this(
+        repository = repository,
+        currentDateFlow = flow {
+            while (true) {
+                emit(currentDateProvider())
+                delay(10_000)
+            }
+        }.distinctUntilChanged()
+    )
+
+    private val _isTrackingActive = MutableStateFlow(true)
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val uiState: StateFlow<StepUiState> = currentDateFlow
+        .onEach { todayDate ->
+            repository.initializeTodayRecord(todayDate)
+        }
+        .flatMapLatest { todayDate ->
+            combine(
+                repository.userProfileFlow,
+                repository.getDailyRecordFlow(todayDate),
+                repository.getRecentDailyRecordsFlow(30),
+                repository.getHourlyRecordsFlow(todayDate),
+                _isTrackingActive
+            ) { profile, todayRecord, recentList, hourlyList, isTrackingActive ->
+                val steps = todayRecord?.steps ?: 0
+                val dailyGoal = todayRecord?.goalSteps?.takeIf { it > 0 } ?: profile.dailyGoal
+                val stride = profile.effectiveStrideMeters
+                val progress = (steps.toFloat() / dailyGoal.coerceAtLeast(1)).coerceIn(0f, 1f)
+
+                StepUiState(
+                    todaySteps = steps,
+                    dailyGoal = dailyGoal,
+                    goalProgress = progress,
+                    distanceKm = StepCalculationEngine.calculateDistanceKm(steps, stride),
+                    caloriesKcal = StepCalculationEngine.calculateCaloriesKcal(steps, profile.weightKg),
+                    activeMinutes = StepCalculationEngine.calculateActiveMinutes(steps),
+                    isPaused = profile.isPaused,
+                    heightCm = profile.heightCm,
+                    weightKg = profile.weightKg,
+                    isMale = profile.isMale,
+                    customStrideMeters = profile.customStrideLengthMeters,
+                    effectiveStrideMeters = stride,
+                    appTheme = profile.appTheme,
+                    recentRecords = recentList,
+                    weeklyRecords = recentList.take(7),
+                    monthlyRecords = recentList.take(30),
+                    hourlyToday = hourlyList,
+                    userProfile = profile,
+                    isTrackingActive = isTrackingActive,
+                    currentDate = todayDate
+                )
+            }
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = StepUiState()
+        )
+
+    fun togglePause() {
+        viewModelScope.launch {
+            val currentPaused = repository.userProfileFlow.first().isPaused
+            repository.setPaused(!currentPaused)
+        }
+    }
+
+    fun setPaused(isPaused: Boolean) {
+        viewModelScope.launch {
+            repository.setPaused(isPaused)
+        }
+    }
+
+    fun updateDailyGoal(newGoal: Int) {
+        viewModelScope.launch {
+            repository.updateDailyGoal(newGoal)
+        }
+    }
+
+    fun updateGoal(newGoal: Int) = updateDailyGoal(newGoal)
+
+    fun updatePhysicalProfile(
+        heightCm: Float,
+        weightKg: Float,
+        isMale: Boolean,
+        customStrideMeters: Float = 0f
+    ) {
+        viewModelScope.launch {
+            repository.updatePhysicalProfile(
+                heightCm = heightCm,
+                weightKg = weightKg,
+                isMale = isMale,
+                customStrideLengthMeters = customStrideMeters
+            )
+        }
+    }
+
+    fun updateProfile(
+        heightCm: Float,
+        weightKg: Float,
+        isMale: Boolean,
+        customStrideMeters: Float = 0f
+    ) = updatePhysicalProfile(heightCm, weightKg, isMale, customStrideMeters)
+
+    fun updateAppTheme(theme: AppTheme) {
+        viewModelScope.launch {
+            repository.updateAppTheme(theme)
+        }
+    }
+
+    fun selectTheme(theme: AppTheme) = updateAppTheme(theme)
+
+    fun setTrackingActive(active: Boolean) {
+        _isTrackingActive.value = active
+    }
+
+    class Factory(private val repository: StepRepository) : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+            if (modelClass.isAssignableFrom(StepViewModel::class.java)) {
+                return StepViewModel(repository) as T
+            }
+            throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
+        }
+    }
+
+    companion object {
+        fun provideFactory(
+            repository: StepRepository
+        ): ViewModelProvider.Factory = Factory(repository)
+
+        fun provideFactory(
+            context: Context
+        ): ViewModelProvider.Factory = provideFactory(StepRepository.getInstance(context))
+    }
+}
+
+
+================================================================================
+FILE [11/27]: app/src/main/kotlin/com/nordic/stepcounter/ui/components/SwissBarChart.kt
+================================================================================
+
+package com.nordic.stepcounter.ui.components
+
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.unit.dp
+import com.nordic.stepcounter.ui.theme.LocalStepPalette
+
+@Composable
+fun SwissBarChart(
+    values: List<Int>,
+    maxValue: Int,
+    modifier: Modifier = Modifier
+) {
+    val palette = LocalStepPalette.current
+    val safeMax = maxValue.coerceAtLeast(1)
+
+    Canvas(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(180.dp)
+    ) {
+        if (values.isEmpty()) return@Canvas
+        val barCount = values.size
+        val spacing = if (barCount > 15) 3.dp.toPx() else 8.dp.toPx()
+        val totalSpacing = spacing * (barCount - 1)
+        val maxBarWidth = 36.dp.toPx()
+        val calculatedBarWidth = ((size.width - totalSpacing) / barCount).coerceAtLeast(3f)
+        val barWidth = calculatedBarWidth.coerceAtMost(maxBarWidth)
+        val totalContentWidth = barCount * barWidth + totalSpacing
+        val startOffset = ((size.width - totalContentWidth) / 2f).coerceAtLeast(0f)
+
+        values.forEachIndexed { index, value ->
+            val ratio = (value.toFloat() / safeMax.toFloat()).coerceIn(0.04f, 1f)
+            val barHeight = size.height * ratio
+            val x = startOffset + index * (barWidth + spacing)
+            val y = size.height - barHeight
+
+            drawRoundRect(
+                color = if (value > 0) palette.accent else palette.trackBackground,
+                topLeft = Offset(x, y),
+                size = Size(barWidth, barHeight),
+                cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
+            )
+        }
+    }
+}
+
+
+================================================================================
+FILE [12/27]: app/src/main/kotlin/com/nordic/stepcounter/ui/screens/HistoryScreen.kt
+================================================================================
+
+package com.nordic.stepcounter.ui.screens
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.nordic.stepcounter.ui.StepUiState
+import com.nordic.stepcounter.ui.components.MetricStatCard
+import com.nordic.stepcounter.ui.components.SwissBarChart
+import com.nordic.stepcounter.ui.theme.LocalStepPalette
+import java.time.LocalDate
+
+@Composable
+fun HistoryScreen(
+    state: StepUiState,
+    modifier: Modifier = Modifier
+) {
+    val palette = LocalStepPalette.current
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) } // 0 = Day (24h), 1 = Week (7d), 2 = Month (30d)
+
+    val recordsByDate = remember(state.recentRecords) {
+        state.recentRecords.associateBy { it.date }
+    }
+    val today = remember(state.currentDate) {
+        runCatching { LocalDate.parse(state.currentDate) }.getOrElse { LocalDate.now() }
+    }
+
+    val chartValues = when (selectedTab) {
+        0 -> (0..23).map { hour -> state.hourlyToday.firstOrNull { it.hour == hour }?.steps ?: 0 }
+        1 -> (6 downTo 0).map { daysAgo ->
+            val dateKey = today.minusDays(daysAgo.toLong()).toString()
+            recordsByDate[dateKey]?.steps ?: 0
+        }
+        else -> (29 downTo 0).map { daysAgo ->
+            val dateKey = today.minusDays(daysAgo.toLong()).toString()
+            recordsByDate[dateKey]?.steps ?: 0
+        }
+    }
+
+    val bestDay = state.recentRecords.maxOfOrNull { it.steps } ?: state.todaySteps
+    val avgSteps = if (state.recentRecords.isNotEmpty()) {
+        state.recentRecords.map { it.steps }.average().toInt()
+    } else {
+        state.todaySteps
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp)
+    ) {
+        Text(
+            text = "ANALYTICS & HISTORY",
+            style = MaterialTheme.typography.labelSmall,
+            color = palette.mutedText
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("24 HOURS", "7 DAYS", "30 DAYS").forEachIndexed { index, title ->
+                FilterChip(
+                    selected = selectedTab == index,
+                    onClick = { selectedTab = index },
+                    label = { Text(title, style = MaterialTheme.typography.labelSmall) }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+        val chartMax = when (selectedTab) {
+            0 -> (chartValues.maxOrNull() ?: 0).coerceAtLeast(1000)
+            else -> maxOf(chartValues.maxOrNull() ?: 0, state.dailyGoal, 1000)
+        }
+        SwissBarChart(
+            values = chartValues,
+            maxValue = chartMax
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            MetricStatCard(
+                value = "%,d".format(avgSteps),
+                unitLabel = "DAILY AVG",
+                modifier = Modifier.weight(1f)
+            )
+            MetricStatCard(
+                value = "%,d".format(bestDay),
+                unitLabel = "PERSONAL BEST",
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+
+================================================================================
+FILE [13/27]: app/src/main/kotlin/com/nordic/stepcounter/ui/screens/ProfileScreen.kt
+================================================================================
+
+package com.nordic.stepcounter.ui.screens
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.nordic.stepcounter.data.preferences.AppTheme
+import com.nordic.stepcounter.domain.StepCalculationEngine
+import com.nordic.stepcounter.ui.StepUiState
+import com.nordic.stepcounter.ui.theme.LocalStepPalette
+import com.nordic.stepcounter.ui.theme.displayName
+import com.nordic.stepcounter.ui.theme.isDark
+import com.nordic.stepcounter.ui.theme.toStepColorPalette
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun ProfileScreen(
+    state: StepUiState,
+    onSelectGoal: (Int) -> Unit,
+    onSelectTheme: (AppTheme) -> Unit,
+    onUpdatePhysicalProfile: (heightCm: Float, weightKg: Float, isMale: Boolean, customStrideMeters: Float) -> Unit = { _, _, _, _ -> },
+    modifier: Modifier = Modifier
+) {
+    val palette = LocalStepPalette.current
+    var showCalibrationDialog by rememberSaveable { mutableStateOf(false) }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp)
+    ) {
+        Text(
+            text = "PROFILE & CALIBRATION",
+            style = MaterialTheme.typography.labelSmall,
+            color = palette.mutedText
+        )
+
+        Spacer(modifier = Modifier.height(20.dp))
+        Text(
+            text = "DAILY STEP GOAL",
+            style = MaterialTheme.typography.labelSmall,
+            color = palette.primaryText
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            listOf(6000, 8000, 10000, 12000).forEach { preset ->
+                FilterChip(
+                    selected = state.dailyGoal == preset,
+                    onClick = { onSelectGoal(preset) },
+                    label = { Text("%,d".format(preset), style = MaterialTheme.typography.labelSmall) }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "BIOMETRICS & STRIDE",
+                style = MaterialTheme.typography.labelSmall,
+                color = palette.primaryText
+            )
+            Text(
+                text = "CALIBRATE",
+                style = MaterialTheme.typography.labelSmall,
+                color = palette.accent,
+                modifier = Modifier
+                    .clickable { showCalibrationDialog = true }
+                    .padding(4.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { showCalibrationDialog = true },
+            shape = RoundedCornerShape(10.dp),
+            color = palette.surface,
+            border = BorderStroke(1.dp, palette.border)
+        ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Text(
+                    text = "Height: ${state.heightCm.toInt()} cm • Weight: ${state.weightKg.toInt()} kg",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = palette.primaryText
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                val sexLabel = if (state.isMale) "Male" else "Female"
+                val strideType = if (state.customStrideMeters > 0f) "Custom" else "Estimated"
+                Text(
+                    text = "Sex: $sexLabel • Stride: ${"%.2f".format(state.effectiveStrideMeters)} m ($strideType)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = palette.mutedText
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(28.dp))
+        Text(
+            text = "COLOR THEME (8 PALETTES)",
+            style = MaterialTheme.typography.labelSmall,
+            color = palette.primaryText
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            maxItemsInEachRow = 2
+        ) {
+            AppTheme.entries.forEach { themeOption ->
+                val optionPalette = themeOption.toStepColorPalette()
+                val isSelected = state.appTheme == themeOption
+                Surface(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { onSelectTheme(themeOption) },
+                    shape = RoundedCornerShape(10.dp),
+                    color = optionPalette.surface,
+                    border = BorderStroke(
+                        width = if (isSelected) 2.dp else 1.dp,
+                        color = if (isSelected) optionPalette.accent else optionPalette.border
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Text(
+                            text = themeOption.displayName,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = optionPalette.primaryText
+                        )
+                        Text(
+                            text = if (themeOption.isDark) "DARK" else "LIGHT",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = optionPalette.accent
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    if (showCalibrationDialog) {
+        var editHeight by rememberSaveable { mutableFloatStateOf(state.heightCm) }
+        var editWeight by rememberSaveable { mutableFloatStateOf(state.weightKg) }
+        var editIsMale by rememberSaveable { mutableStateOf(state.isMale) }
+        var editCustomStride by rememberSaveable { mutableFloatStateOf(state.customStrideMeters) }
+
+        AlertDialog(
+            onDismissRequest = { showCalibrationDialog = false },
+            containerColor = palette.surface,
+            title = {
+                Text(
+                    text = "CALIBRATE BIOMETRICS",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = palette.primaryText
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // Sex selection
+                    Column {
+                        Text("SEX", style = MaterialTheme.typography.labelSmall, color = palette.mutedText)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(
+                                selected = editIsMale,
+                                onClick = { editIsMale = true },
+                                label = { Text("Male", style = MaterialTheme.typography.labelSmall) }
+                            )
+                            FilterChip(
+                                selected = !editIsMale,
+                                onClick = { editIsMale = false },
+                                label = { Text("Female", style = MaterialTheme.typography.labelSmall) }
+                            )
+                        }
+                    }
+
+                    // Height adjustment
+                    Column {
+                        Text("HEIGHT: ${editHeight.toInt()} CM", style = MaterialTheme.typography.labelSmall, color = palette.mutedText)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = { editHeight = (editHeight - 5f).coerceAtLeast(100f) },
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+                            ) {
+                                Text("-5", color = palette.primaryText, maxLines = 1)
+                            }
+                            OutlinedButton(
+                                onClick = { editHeight = (editHeight - 1f).coerceAtLeast(100f) },
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+                            ) {
+                                Text("-1", color = palette.primaryText, maxLines = 1)
+                            }
+                            OutlinedButton(
+                                onClick = { editHeight = (editHeight + 1f).coerceAtMost(250f) },
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+                            ) {
+                                Text("+1", color = palette.primaryText, maxLines = 1)
+                            }
+                            OutlinedButton(
+                                onClick = { editHeight = (editHeight + 5f).coerceAtMost(250f) },
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+                            ) {
+                                Text("+5", color = palette.primaryText, maxLines = 1)
+                            }
+                        }
+                    }
+
+                    // Weight adjustment
+                    Column {
+                        Text("WEIGHT: ${editWeight.toInt()} KG", style = MaterialTheme.typography.labelSmall, color = palette.mutedText)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = { editWeight = (editWeight - 5f).coerceAtLeast(30f) },
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+                            ) {
+                                Text("-5", color = palette.primaryText, maxLines = 1)
+                            }
+                            OutlinedButton(
+                                onClick = { editWeight = (editWeight - 1f).coerceAtLeast(30f) },
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+                            ) {
+                                Text("-1", color = palette.primaryText, maxLines = 1)
+                            }
+                            OutlinedButton(
+                                onClick = { editWeight = (editWeight + 1f).coerceAtMost(250f) },
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+                            ) {
+                                Text("+1", color = palette.primaryText, maxLines = 1)
+                            }
+                            OutlinedButton(
+                                onClick = { editWeight = (editWeight + 5f).coerceAtMost(250f) },
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+                            ) {
+                                Text("+5", color = palette.primaryText, maxLines = 1)
+                            }
+                        }
+                    }
+
+                    // Custom Stride adjustment
+                    Column {
+                        val computedStride = StepCalculationEngine.calculateDefaultStrideLengthMeters(editHeight, editIsMale)
+                        Text(
+                            text = if (editCustomStride > 0f) {
+                                "CUSTOM STRIDE: ${"%.2f".format(editCustomStride)} M"
+                            } else {
+                                "ESTIMATED STRIDE: ${"%.2f".format(computedStride)} M"
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = palette.mutedText
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            FilterChip(
+                                selected = editCustomStride == 0f,
+                                onClick = { editCustomStride = 0f },
+                                label = { Text("Auto", style = MaterialTheme.typography.labelSmall, maxLines = 1) },
+                                modifier = Modifier.weight(1f)
+                            )
+                            OutlinedButton(
+                                onClick = {
+                                    val current = if (editCustomStride > 0f) editCustomStride else computedStride
+                                    editCustomStride = (current - 0.02f).coerceAtLeast(0.3f)
+                                },
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+                            ) {
+                                Text("-0.02", color = palette.primaryText, maxLines = 1)
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    val current = if (editCustomStride > 0f) editCustomStride else computedStride
+                                    editCustomStride = (current + 0.02f).coerceAtMost(1.5f)
+                                },
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+                            ) {
+                                Text("+0.02", color = palette.primaryText, maxLines = 1)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onUpdatePhysicalProfile(editHeight, editWeight, editIsMale, editCustomStride)
+                        showCalibrationDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = palette.accent)
+                ) {
+                    Text("SAVE", color = palette.background)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCalibrationDialog = false }) {
+                    Text("CANCEL", color = palette.mutedText)
+                }
+            }
+        )
+    }
+}
+
+
+================================================================================
+FILE [14/27]: app/src/main/kotlin/com/nordic/stepcounter/ui/screens/TodayScreen.kt
+================================================================================
+
+package com.nordic.stepcounter.ui.screens
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.nordic.stepcounter.ui.StepUiState
+import com.nordic.stepcounter.ui.components.MetricStatCard
+import com.nordic.stepcounter.ui.components.PauseResumeButton
+import com.nordic.stepcounter.ui.components.RadialProgressGauge
+import com.nordic.stepcounter.ui.theme.LocalStepPalette
+
+@Composable
+fun TodayScreen(
+    state: StepUiState,
+    onTogglePause: () -> Unit,
+    hasPermission: Boolean = true,
+    hasStepSensor: Boolean = true,
+    onRequestPermission: () -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    val palette = LocalStepPalette.current
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = "NORDIC STEP COUNTER",
+            style = MaterialTheme.typography.labelSmall,
+            color = palette.mutedText
+        )
+
+        RadialProgressGauge(
+            steps = state.todaySteps,
+            goal = state.dailyGoal,
+            isPaused = state.isPaused
+        )
+
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                MetricStatCard(
+                    value = "%.2f".format(state.distanceKm),
+                    unitLabel = "KM",
+                    modifier = Modifier.weight(1f)
+                )
+                MetricStatCard(
+                    value = "%.0f".format(state.caloriesKcal),
+                    unitLabel = "KCAL",
+                    modifier = Modifier.weight(1f)
+                )
+                MetricStatCard(
+                    value = "${state.activeMinutes}",
+                    unitLabel = "MINS",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            if (!hasStepSensor) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    color = palette.surface,
+                    border = BorderStroke(1.dp, palette.border)
+                ) {
+                    Text(
+                        text = "No hardware step counter sensor detected on this device",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = palette.mutedText,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                    )
+                }
+            } else if (!hasPermission) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    color = palette.surface,
+                    border = BorderStroke(1.dp, palette.border)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Activity permission required to count steps",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = palette.mutedText,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = onRequestPermission) {
+                            Text(
+                                text = "GRANT",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = palette.accent
+                            )
+                        }
+                    }
+                }
+            }
+            PauseResumeButton(
+                isPaused = state.isPaused,
+                onToggle = onTogglePause
+            )
+        }
+    }
+}
+
+
+================================================================================
+FILE [15/27]: app/src/main/kotlin/com/nordic/stepcounter/ui/theme/Theme.kt
+================================================================================
+
+package com.nordic.stepcounter.ui.theme
+
+import android.app.Activity
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
+import com.nordic.stepcounter.data.preferences.AppTheme
+
+@Composable
+fun NordicStepTheme(
+    appTheme: AppTheme = AppTheme.NORDIC_DARK,
+    content: @Composable () -> Unit
+) {
+    val palette = appTheme.toStepColorPalette()
+
+    val colorScheme = if (appTheme.isDark) {
+        darkColorScheme(
+            primary = palette.accent,
+            onPrimary = palette.background,
+            secondary = palette.accent,
+            onSecondary = palette.background,
+            secondaryContainer = palette.accent.copy(alpha = 0.18f),
+            onSecondaryContainer = palette.accent,
+            background = palette.background,
+            onBackground = palette.primaryText,
+            surface = palette.surface,
+            onSurface = palette.primaryText,
+            surfaceVariant = palette.surface,
+            onSurfaceVariant = palette.mutedText,
+            surfaceContainer = palette.surface,
+            outline = palette.border,
+            outlineVariant = palette.border
+        )
+    } else {
+        lightColorScheme(
+            primary = palette.accent,
+            onPrimary = palette.background,
+            secondary = palette.accent,
+            onSecondary = palette.background,
+            secondaryContainer = palette.accent.copy(alpha = 0.18f),
+            onSecondaryContainer = palette.accent,
+            background = palette.background,
+            onBackground = palette.primaryText,
+            surface = palette.surface,
+            onSurface = palette.primaryText,
+            surfaceVariant = palette.surface,
+            onSurfaceVariant = palette.mutedText,
+            surfaceContainer = palette.surface,
+            outline = palette.border,
+            outlineVariant = palette.border
+        )
+    }
+
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as? Activity)?.window ?: return@SideEffect
+            val insetsController = WindowCompat.getInsetsController(window, view)
+            insetsController.isAppearanceLightStatusBars = !appTheme.isDark
+            insetsController.isAppearanceLightNavigationBars = !appTheme.isDark
+        }
+    }
+
+    CompositionLocalProvider(LocalStepPalette provides palette) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = SwissTypography,
+            content = content
+        )
+    }
+}
+
+
+================================================================================
+FILE [16/27]: app/src/main/res/drawable/ic_tab_history.xml
+================================================================================
+
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M4,9h4v11H4zM10,4h4v16h-4zM16,13h4v7h-4z"/>
+</vector>
+
+
+================================================================================
+FILE [17/27]: app/src/main/res/drawable/ic_tab_profile.xml
+================================================================================
+
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,12c2.21,0 4,-1.79 4,-4s-1.79,-4 -4,-4 -4,1.79 -4,4 1.79,4 4,4zM12,14c-2.67,0 -8,1.34 -8,4v2h16v-2c0,-2.66 -5.33,-4 -8,-4z"/>
+</vector>
+
+
+================================================================================
+FILE [18/27]: app/src/main/res/drawable/ic_tab_today.xml
+================================================================================
+
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M13.5,5.5c1.1,0 2,-0.9 2,-2s-0.9,-2 -2,-2 -2,0.9 -2,2 0.9,2 2,2zM9.8,8.9L7,23h2.1l1.8,-8 2.1,2v6h2v-7.5l-2.1,-2 0.6,-3C14.8,12 16.8,13 19,13v-2c-1.9,0 -3.5,-1 -4.3,-2.4l-1,-1.6c-0.4,-0.6 -1,-1 -1.7,-1 -0.3,0 -0.5,0.1 -0.8,0.1L6,8.3V13h2V9.6l1.8,-0.7"/>
+</vector>
+
+
+================================================================================
+FILE [19/27]: app/src/main/res/xml/backup_rules.xml
+================================================================================
+
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <include domain="database" path="."/>
+    <include domain="file" path="."/>
+    <exclude domain="file" path="datastore/nordic_user_preferences.preferences_pb"/>
+</full-backup-content>
+
+
+================================================================================
+FILE [20/27]: app/src/main/res/xml/data_extraction_rules.xml
+================================================================================
+
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="database" path="."/>
+        <include domain="file" path="."/>
+        <exclude domain="file" path="datastore/nordic_user_preferences.preferences_pb"/>
+    </cloud-backup>
+    <device-transfer>
+        <include domain="database" path="."/>
+        <include domain="file" path="."/>
+        <exclude domain="file" path="datastore/nordic_user_preferences.preferences_pb"/>
+    </device-transfer>
+</data-extraction-rules>
+
+
+================================================================================
+FILE [21/27]: app/src/test/kotlin/com/nordic/stepcounter/data/local/StepDaoTest.kt
+================================================================================
+
+package com.nordic.stepcounter.data.local
+
+import android.content.Context
+import androidx.room.Room
+import androidx.test.core.app.ApplicationProvider
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runTest
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import java.io.IOException
+
+@RunWith(RobolectricTestRunner::class)
+class StepDaoTest {
+
+    private lateinit var database: StepDatabase
+    private lateinit var stepDao: StepDao
+
+    @Before
+    fun createDb() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        database = Room.inMemoryDatabaseBuilder(context, StepDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        stepDao = database.stepDao()
+    }
+
+    @After
+    @Throws(IOException::class)
+    fun closeDb() {
+        database.close()
+    }
+
+    @Test
+    fun testInsertAndGetDailySteps() = runTest {
+        val daily = DailyStepEntity(
+            date = "2026-11-10",
+            steps = 8450,
+            distanceMeters = 6337.5f,
+            caloriesKcal = 422.5f,
+            activeDurationSeconds = 5070L,
+            goalSteps = 10000
+        )
+        stepDao.upsertDaily(daily)
+
+        val retrievedFlow = stepDao.getDailyRecord("2026-11-10").first()
+        assertNotNull(retrievedFlow)
+        assertEquals("2026-11-10", retrievedFlow?.date)
+        assertEquals(8450, retrievedFlow?.steps)
+        assertEquals(6337.5f, retrievedFlow?.distanceMeters ?: 0f, 0.01f)
+        assertEquals(422.5f, retrievedFlow?.caloriesKcal ?: 0f, 0.01f)
+        assertEquals(5070L, retrievedFlow?.activeDurationSeconds)
+        assertEquals(10000, retrievedFlow?.goalSteps)
+
+        val retrievedDirect = stepDao.getDailyRecordDirect("2026-11-10")
+        assertEquals(daily, retrievedDirect)
+    }
+
+    @Test
+    fun testHourlyStepBucketing() = runTest {
+        val h14 = HourlyStepEntity(date = "2026-11-10", hour = 14, steps = 1200)
+        val h8 = HourlyStepEntity(date = "2026-11-10", hour = 8, steps = 800)
+        val h10 = HourlyStepEntity(date = "2026-11-10", hour = 10, steps = 1500)
+        val hOtherDate = HourlyStepEntity(date = "2026-11-09", hour = 8, steps = 500)
+
+        stepDao.upsertHourly(h14)
+        stepDao.upsertHourly(h8)
+        stepDao.upsertHourly(h10)
+        stepDao.upsertHourly(hOtherDate)
+
+        val records = stepDao.getHourlyRecordsForDate("2026-11-10").first()
+        assertEquals(3, records.size)
+        assertEquals(8, records[0].hour)
+        assertEquals(800, records[0].steps)
+        assertEquals(10, records[1].hour)
+        assertEquals(1500, records[1].steps)
+        assertEquals(14, records[2].hour)
+        assertEquals(1200, records[2].steps)
+
+        val directRecord = stepDao.getHourlyRecordDirect("2026-11-10", 14)
+        assertEquals(1200, directRecord?.steps)
+
+        val nonExistent = stepDao.getHourlyRecordDirect("2026-11-10", 3)
+        org.junit.Assert.assertNull(nonExistent)
+    }
+
+    @Test
+    fun testUpdateDailyGoal() = runTest {
+        val daily = DailyStepEntity(
+            date = "2026-11-10",
+            steps = 5000,
+            distanceMeters = 3500f,
+            caloriesKcal = 250f,
+            activeDurationSeconds = 3000L,
+            goalSteps = 8000
+        )
+        stepDao.upsertDaily(daily)
+
+        val updatedRows = stepDao.updateDailyGoal(date = "2026-11-10", goal = 12000)
+        assertEquals(1, updatedRows)
+
+        val updatedRecord = stepDao.getDailyRecordDirect("2026-11-10")
+        assertEquals(12000, updatedRecord?.goalSteps)
+        assertEquals(5000, updatedRecord?.steps)
+    }
+
+    @Test
+    fun testGetRecentDailyRecords() = runTest {
+        val d1 = DailyStepEntity("2026-11-08", 4000, 3000f, 200f, 2400L, 10000)
+        val d2 = DailyStepEntity("2026-11-09", 7000, 5000f, 350f, 4200L, 10000)
+        val d3 = DailyStepEntity("2026-11-10", 9000, 6700f, 450f, 5400L, 10000)
+
+        stepDao.upsertDaily(d1)
+        stepDao.upsertDaily(d3)
+        stepDao.upsertDaily(d2)
+
+        val recentTwo = stepDao.getRecentDailyRecords(limit = 2).first()
+        assertEquals(2, recentTwo.size)
+        assertEquals("2026-11-10", recentTwo[0].date)
+        assertEquals("2026-11-09", recentTwo[1].date)
+
+        val recentAll = stepDao.getRecentDailyRecords(limit = 10).first()
+        assertEquals(3, recentAll.size)
+        assertEquals("2026-11-10", recentAll[0].date)
+        assertEquals("2026-11-09", recentAll[1].date)
+        assertEquals("2026-11-08", recentAll[2].date)
+    }
+
+    @Test
+    fun testGetTotalLifetimeSteps() = runTest {
+        val d1 = DailyStepEntity("2026-11-08", 4000, 3000f, 200f, 2400L, 10000)
+        val d2 = DailyStepEntity("2026-11-09", 7000, 5000f, 350f, 4200L, 10000)
+        val d3 = DailyStepEntity("2026-11-10", 9000, 6700f, 450f, 5400L, 10000)
+
+        stepDao.upsertDaily(d1)
+        stepDao.upsertDaily(d2)
+        stepDao.upsertDaily(d3)
+
+        val totalSteps = stepDao.getTotalLifetimeSteps()
+        assertEquals(20000L, totalSteps)
+    }
+
+    @Test
+    fun testUpsertDailyAndHourlyAtomic() = runTest {
+        val daily = DailyStepEntity(
+            date = "2026-11-12",
+            steps = 2500,
+            distanceMeters = 1800f,
+            caloriesKcal = 120f,
+            activeDurationSeconds = 1500L,
+            goalSteps = 8000
+        )
+        val hourly = HourlyStepEntity(
+            date = "2026-11-12",
+            hour = 10,
+            steps = 2500
+        )
+
+        stepDao.upsertDailyAndHourly(daily, hourly)
+
+        val retrievedDaily = stepDao.getDailyRecordDirect("2026-11-12")
+        val retrievedHourly = stepDao.getHourlyRecordDirect("2026-11-12", 10)
+
+        assertEquals(daily, retrievedDaily)
+        assertEquals(hourly, retrievedHourly)
+
+        // Upsert with null hourly
+        val dailyUpdate = daily.copy(steps = 2600)
+        stepDao.upsertDailyAndHourly(dailyUpdate, null)
+        val updatedDaily = stepDao.getDailyRecordDirect("2026-11-12")
+        assertEquals(2600, updatedDaily?.steps)
+    }
+}
+
+
+================================================================================
+FILE [22/27]: app/src/test/kotlin/com/nordic/stepcounter/data/repository/StepRepositoryTest.kt
+================================================================================
+
+package com.nordic.stepcounter.data.repository
+
+import android.content.Context
+import androidx.room.Room
+import androidx.test.core.app.ApplicationProvider
+import com.nordic.stepcounter.data.local.StepDatabase
+import com.nordic.stepcounter.data.preferences.ProfilePreferences
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runTest
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+
+@RunWith(RobolectricTestRunner::class)
+class StepRepositoryTest {
+
+    private lateinit var database: StepDatabase
+    private lateinit var preferences: ProfilePreferences
+    private lateinit var repository: StepRepository
+
+    @Before
+    fun setUp() = runTest {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        database = Room.inMemoryDatabaseBuilder(context, StepDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        preferences = ProfilePreferences(context)
+        preferences.clear()
+        repository = StepRepository(database.stepDao(), preferences)
+    }
+
+    @After
+    fun tearDown() = runTest {
+        database.close()
+        preferences.clear()
+    }
+
+    @Test
+    fun firstSensorReading_initializesBaselineWithZeroDeltaAndCreatesInitialRecord() = runTest {
+        val record = repository.processHardwareSensorReading(
+            rawSensorSteps = 20000L,
+            date = "2026-11-10",
+            hour = 8
+        )
+
+        assertEquals(0, record.steps)
+        assertEquals(0f, record.distanceMeters, 0.01f)
+        assertEquals(0f, record.caloriesKcal, 0.01f)
+        assertEquals(0L, record.activeDurationSeconds)
+
+        val profile = repository.userProfileFlow.first()
+        assertEquals(20000L, profile.lastSensorStepValue)
+        assertEquals("2026-11-10", profile.lastRecordedDate)
+
+        val savedDaily = repository.getDailyRecordDirect("2026-11-10")
+        assertNotNull(savedDaily)
+        assertEquals(0, savedDaily?.steps)
+    }
+
+    @Test
+    fun normalSensorIncrements_updateDailyAndHourlyRecordsCorrectly() = runTest {
+        // Initialize baseline at 20000
+        repository.processHardwareSensorReading(20000L, "2026-11-10", 8)
+
+        // User walks 150 steps in hour 8
+        val r1 = repository.processHardwareSensorReading(20150L, "2026-11-10", 8)
+        assertEquals(150, r1.steps)
+
+        // User walks 200 more steps in hour 9
+        val r2 = repository.processHardwareSensorReading(20350L, "2026-11-10", 9)
+        assertEquals(350, r2.steps)
+
+        val daily = repository.getDailyRecordDirect("2026-11-10")
+        assertEquals(350, daily?.steps)
+
+        val hourlyList = repository.getHourlyRecordsFlow("2026-11-10").first()
+        assertEquals(2, hourlyList.size)
+        assertEquals(8, hourlyList[0].hour)
+        assertEquals(150, hourlyList[0].steps)
+        assertEquals(9, hourlyList[1].hour)
+        assertEquals(200, hourlyList[1].steps)
+
+        val profile = repository.userProfileFlow.first()
+        assertEquals(20350L, profile.lastSensorStepValue)
+    }
+
+    @Test
+    fun midnightRollover_startsNewDayAtZeroStepsAndPreservesBaseline() = runTest {
+        // Day 1: User takes 500 steps, ending at hardware reading 20500
+        repository.processHardwareSensorReading(20000L, "2026-11-10", 8)
+        repository.processHardwareSensorReading(20500L, "2026-11-10", 18)
+
+        val day1Record = repository.getDailyRecordDirect("2026-11-10")
+        assertEquals(500, day1Record?.steps)
+
+        // Day 2 (Midnight): First reading at 00:01 with reading 20500 (no new steps yet)
+        val day2Initial = repository.processHardwareSensorReading(20500L, "2026-11-11", 0)
+        assertEquals(0, day2Initial.steps)
+        assertEquals("2026-11-11", day2Initial.date)
+
+        // Verify Day 1 record is untouched
+        val day1AfterRollover = repository.getDailyRecordDirect("2026-11-10")
+        assertEquals(500, day1AfterRollover?.steps)
+
+        // Baseline preserved and date updated
+        val profile = repository.userProfileFlow.first()
+        assertEquals(20500L, profile.lastSensorStepValue)
+        assertEquals("2026-11-11", profile.lastRecordedDate)
+
+        // Day 2: User walks 75 steps at 07:00
+        val day2Walk = repository.processHardwareSensorReading(20575L, "2026-11-11", 7)
+        assertEquals(75, day2Walk.steps)
+        assertEquals("2026-11-11", day2Walk.date)
+
+        // Hourly record for day 2 exists
+        val hourlyDay2 = repository.getHourlyRecordsFlow("2026-11-11").first()
+        assertEquals(1, hourlyDay2.size)
+        assertEquals(7, hourlyDay2[0].hour)
+        assertEquals(75, hourlyDay2[0].steps)
+    }
+
+    @Test
+    fun midnightRolloverWithSteps_addsDeltaOnlyToNewDay() = runTest {
+        // Day 1: ends at 30000 with 1000 steps
+        repository.processHardwareSensorReading(29000L, "2026-11-10", 10)
+        repository.processHardwareSensorReading(30000L, "2026-11-10", 22)
+
+        // First event of day 2 has 30050 steps taken during midnight transit
+        val day2Record = repository.processHardwareSensorReading(30050L, "2026-11-11", 1)
+        assertEquals(50, day2Record.steps)
+        assertEquals("2026-11-11", day2Record.date)
+
+        val day1Record = repository.getDailyRecordDirect("2026-11-10")
+        assertEquals(1000, day1Record?.steps)
+    }
+
+    @Test
+    fun deviceReboot_handlesCounterResetGracefully() = runTest {
+        // Before reboot: baseline 45000 with 200 steps
+        repository.processHardwareSensorReading(44800L, "2026-11-10", 12)
+        repository.processHardwareSensorReading(45000L, "2026-11-10", 13)
+
+        // Phone reboots: counter resets to 35
+        val rebootRecord = repository.processHardwareSensorReading(35L, "2026-11-10", 14)
+        assertEquals(235, rebootRecord.steps) // 200 + 35
+
+        val profile = repository.userProfileFlow.first()
+        assertEquals(35L, profile.lastSensorStepValue)
+    }
+
+    @Test
+    fun pauseState_advancesBaselineWithoutIncrementingSteps() = runTest {
+        repository.processHardwareSensorReading(1000L, "2026-11-10", 10)
+        repository.processHardwareSensorReading(1200L, "2026-11-10", 10) // 200 steps
+
+        repository.setPaused(true)
+        val profilePaused = repository.userProfileFlow.first()
+        assertTrue(profilePaused.isPaused)
+
+        // Steps taken while paused (vehicle transit)
+        val pausedRecord = repository.processHardwareSensorReading(1800L, "2026-11-10", 11)
+        assertEquals(200, pausedRecord.steps) // Unchanged!
+
+        val profileAfterPauseWalk = repository.userProfileFlow.first()
+        assertEquals(1800L, profileAfterPauseWalk.lastSensorStepValue)
+
+        // User unpauses
+        repository.setPaused(false)
+        val resumedRecord = repository.processHardwareSensorReading(1850L, "2026-11-10", 12)
+        assertEquals(250, resumedRecord.steps) // 200 + 50 (1800 to 1850)
+    }
+
+    @Test
+    fun updateDailyGoal_updatesPreferencesAndDatabase() = runTest {
+        repository.processHardwareSensorReading(1000L, "2026-11-10", 10)
+        repository.updateDailyGoal(12000)
+
+        val profile = repository.userProfileFlow.first()
+        assertEquals(12000, profile.dailyGoal)
+
+        val today = java.time.LocalDate.now().toString()
+        val record = repository.initializeTodayRecord(today)
+        repository.updateDailyGoal(15000)
+        val updated = repository.getDailyRecordDirect(today)
+        assertEquals(15000, updated?.goalSteps)
+    }
+
+    @Test
+    fun updateDailyGoal_clampsInvalidAndExtremeGoals() = runTest {
+        // Clamps below 1,000 to 1,000
+        repository.updateDailyGoal(0)
+        assertEquals(1000, repository.userProfileFlow.first().dailyGoal)
+
+        repository.updateDailyGoal(-500)
+        assertEquals(1000, repository.userProfileFlow.first().dailyGoal)
+
+        // Clamps above 100,000 to 100,000
+        repository.updateDailyGoal(250000)
+        assertEquals(100000, repository.userProfileFlow.first().dailyGoal)
+
+        // Allows valid goal
+        repository.updateDailyGoal(10000)
+        assertEquals(10000, repository.userProfileFlow.first().dailyGoal)
+    }
+
+    @Test
+    fun processHardwareSensorReading_guardsAgainstIntegerOverflow() = runTest {
+        // Baseline 0
+        repository.processHardwareSensorReading(0L, "2026-11-10", 10)
+        // Steps close to Int.MAX_VALUE
+        val record = repository.processHardwareSensorReading(Int.MAX_VALUE.toLong() + 5000L, "2026-11-10", 10)
+        assertTrue(record.steps > 0)
+        assertEquals(Int.MAX_VALUE, record.steps)
+    }
+}
+
+
+================================================================================
+FILE [23/27]: app/src/test/kotlin/com/nordic/stepcounter/service/StepSensorManagerTest.kt
+================================================================================
+
+package com.nordic.stepcounter.service
+
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorManager
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import java.lang.reflect.Field
+
+@RunWith(RobolectricTestRunner::class)
+class StepSensorManagerTest {
+
+    private fun createSensorEvent(sensorType: Int, value: Float): SensorEvent {
+        val constructor = SensorEvent::class.java.declaredConstructors.first()
+        constructor.isAccessible = true
+        val params = constructor.parameterTypes
+        val args = params.map { type ->
+            when (type) {
+                Int::class.javaPrimitiveType -> 16
+                Long::class.javaPrimitiveType -> 0L
+                FloatArray::class.java -> FloatArray(16)
+                Sensor::class.java -> mockk<Sensor>(relaxed = true)
+                else -> null
+            }
+        }.toTypedArray()
+        val event = constructor.newInstance(*args) as SensorEvent
+        val valuesField: Field = SensorEvent::class.java.getField("values")
+        valuesField.isAccessible = true
+        valuesField.set(event, floatArrayOf(value))
+
+        val mockSensor = mockk<Sensor>()
+        every { mockSensor.type } returns sensorType
+
+        val sensorField: Field = SensorEvent::class.java.getField("sensor")
+        sensorField.isAccessible = true
+        sensorField.set(event, mockSensor)
+
+        return event
+    }
+
+    @Test
+    fun startListening_registersListenerWithBatchLatencyWhenSensorExists() {
+        val mockSensorManager = mockk<SensorManager>(relaxed = true)
+        val mockSensor = mockk<Sensor>()
+        every { mockSensor.type } returns Sensor.TYPE_STEP_COUNTER
+        every { mockSensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) } returns mockSensor
+        every {
+            mockSensorManager.registerListener(
+                any(),
+                mockSensor,
+                SensorManager.SENSOR_DELAY_NORMAL,
+                60_000_000
+            )
+        } returns true
+
+        val manager = StepSensorManager(mockSensorManager)
+        assertTrue(manager.isSensorAvailable)
+
+        val success = manager.startListening()
+        assertTrue(success)
+
+        verify(exactly = 1) {
+            mockSensorManager.registerListener(
+                manager,
+                mockSensor,
+                SensorManager.SENSOR_DELAY_NORMAL,
+                60_000_000
+            )
+        }
+    }
+
+    @Test
+    fun startListening_returnsFalseWhenSensorMissing() {
+        val mockSensorManager = mockk<SensorManager>(relaxed = true)
+        every { mockSensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) } returns null
+
+        val manager = StepSensorManager(mockSensorManager)
+        assertFalse(manager.isSensorAvailable)
+        assertFalse(manager.startListening())
+    }
+
+    @Test
+    fun stopListening_unregistersListener() {
+        val mockSensorManager = mockk<SensorManager>(relaxed = true)
+        val manager = StepSensorManager(mockSensorManager)
+        manager.stopListening()
+
+        verify(exactly = 1) {
+            mockSensorManager.unregisterListener(manager)
+        }
+    }
+
+    @Test
+    fun onSensorChanged_invokesCallbackAndEmitsFlowForStepCounter() = runTest {
+        val mockSensorManager = mockk<SensorManager>(relaxed = true)
+        var receivedSteps = 0L
+
+        val manager = StepSensorManager(mockSensorManager) { steps ->
+            receivedSteps = steps
+        }
+
+        val event = createSensorEvent(Sensor.TYPE_STEP_COUNTER, 45200f)
+        manager.onSensorChanged(event)
+
+        assertEquals(45200L, receivedSteps)
+        assertEquals(45200L, manager.stepEvents.first())
+    }
+
+    @Test
+    fun onSensorChanged_ignoresOtherSensorTypes() = runTest {
+        val mockSensorManager = mockk<SensorManager>(relaxed = true)
+        var receivedSteps = -1L
+
+        val manager = StepSensorManager(mockSensorManager) { steps ->
+            receivedSteps = steps
+        }
+
+        val event = createSensorEvent(Sensor.TYPE_ACCELEROMETER, 9.8f)
+        manager.onSensorChanged(event)
+
+        assertEquals(-1L, receivedSteps)
+    }
+
+    @Test
+    fun startListening_preventsDuplicateListenerRegistrations() {
+        val mockSensorManager = mockk<SensorManager>(relaxed = true)
+        val mockSensor = mockk<Sensor>()
+        every { mockSensor.type } returns Sensor.TYPE_STEP_COUNTER
+        every { mockSensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) } returns mockSensor
+        every {
+            mockSensorManager.registerListener(
+                any(),
+                mockSensor,
+                SensorManager.SENSOR_DELAY_NORMAL,
+                60_000_000
+            )
+        } returns true
+
+        val manager = StepSensorManager(mockSensorManager)
+        assertTrue(manager.startListening())
+        assertTrue(manager.startListening())
+
+        verify(exactly = 1) {
+            mockSensorManager.registerListener(
+                manager,
+                mockSensor,
+                SensorManager.SENSOR_DELAY_NORMAL,
+                60_000_000
+            )
+        }
+    }
+
+    @Test
+    fun flushAndWait_completesWhenOnFlushCompletedFires() = runTest {
+        val mockSensorManager = mockk<SensorManager>(relaxed = true)
+        val mockSensor = mockk<Sensor>()
+        every { mockSensorManager.flush(any()) } answers {
+            val listener = firstArg<StepSensorManager>()
+            listener.onFlushCompleted(mockSensor)
+            true
+        }
+
+        val manager = StepSensorManager(mockSensorManager)
+        val result = manager.flushAndWait(timeoutMs = 100L)
+        assertTrue(result)
+        verify(exactly = 1) { mockSensorManager.flush(manager) }
+    }
+
+    @Test
+    fun flushAndWait_timesOutSafelyWhenOnFlushCompletedDoesNotFire() = runTest {
+        val mockSensorManager = mockk<SensorManager>(relaxed = true)
+        every { mockSensorManager.flush(any()) } returns true
+
+        val manager = StepSensorManager(mockSensorManager)
+        val result = manager.flushAndWait(timeoutMs = 50L)
+        assertTrue(result)
+        verify(exactly = 1) { mockSensorManager.flush(manager) }
+    }
+}
+
+
+================================================================================
+FILE [24/27]: app/src/test/kotlin/com/nordic/stepcounter/service/StepServiceTest.kt
+================================================================================
+
+package com.nordic.stepcounter.service
+
+import android.Manifest
+import android.app.Application
+import android.app.NotificationManager
+import android.app.Service
+import android.content.Context
+import android.content.Intent
+import androidx.test.core.app.ApplicationProvider
+import com.nordic.stepcounter.data.preferences.ProfilePreferences
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runTest
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.Robolectric
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
+
+@RunWith(RobolectricTestRunner::class)
+class StepServiceTest {
+
+    private lateinit var application: Application
+    private lateinit var preferences: ProfilePreferences
+    private var stepSensor: android.hardware.Sensor? = null
+
+    @Before
+    fun setUp() = runTest {
+        application = ApplicationProvider.getApplicationContext()
+        val sensorManager = application.getSystemService(Context.SENSOR_SERVICE) as android.hardware.SensorManager
+        val shadowSensorManager = shadowOf(sensorManager)
+        val sensor = org.robolectric.shadows.ShadowSensor.newInstance(android.hardware.Sensor.TYPE_STEP_COUNTER)
+        stepSensor = sensor
+        shadowSensorManager.addSensor(sensor)
+        preferences = ProfilePreferences(application)
+        preferences.clear()
+    }
+
+    @After
+    fun tearDown() = runTest {
+        preferences.clear()
+        com.nordic.stepcounter.data.repository.StepRepository.resetInstance()
+    }
+
+    @Test
+    fun onCreate_stopsSelfIfActivityRecognitionPermissionNotGranted() {
+        val shadowApp = shadowOf(application)
+        shadowApp.denyPermissions(Manifest.permission.ACTIVITY_RECOGNITION)
+
+        val controller = Robolectric.buildService(StepCounterService::class.java)
+        val service = controller.get()
+        controller.create()
+
+        val shadowService = shadowOf(service)
+        assertTrue(shadowService.isStoppedBySelf)
+    }
+
+    @Test
+    fun onStartCommand_stopsSelfAndReturnsNotStickyIfPermissionMissing() {
+        val shadowApp = shadowOf(application)
+        shadowApp.denyPermissions(Manifest.permission.ACTIVITY_RECOGNITION)
+
+        val controller = Robolectric.buildService(StepCounterService::class.java)
+        controller.create()
+        val service = controller.get()
+
+        val startCommandResult = service.onStartCommand(
+            Intent(application, StepCounterService::class.java).apply {
+                action = StepCounterService.ACTION_START
+            },
+            0,
+            1
+        )
+
+        assertEquals(Service.START_NOT_STICKY, startCommandResult)
+        assertTrue(shadowOf(service).isStoppedBySelf)
+    }
+
+    @Test
+    fun onStartCommand_startsForegroundTrackingWhenPermissionGranted() {
+        val shadowApp = shadowOf(application)
+        shadowApp.grantPermissions(Manifest.permission.ACTIVITY_RECOGNITION)
+
+        val controller = Robolectric.buildService(StepCounterService::class.java)
+        controller.create()
+        val service = controller.get()
+
+        val startCommandResult = service.onStartCommand(
+            Intent(application, StepCounterService::class.java).apply {
+                action = StepCounterService.ACTION_START
+            },
+            0,
+            1
+        )
+
+        assertEquals(Service.START_STICKY, startCommandResult)
+        assertFalse(shadowOf(service).isStoppedBySelf)
+
+        val shadowService = shadowOf(service)
+        val notification = shadowService.lastForegroundNotification
+        assertNotNull(notification)
+        assertEquals(StepCounterService.NOTIFICATION_ID, shadowService.lastForegroundNotificationId)
+
+        val notificationManager = application.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val channel = notificationManager.getNotificationChannel(StepCounterService.CHANNEL_ID)
+        assertNotNull(channel)
+        assertEquals(NotificationManager.IMPORTANCE_LOW, channel.importance)
+
+        controller.destroy()
+    }
+
+    @Test
+    fun actionPauseAndResume_updatesPreferencesAccurately() {
+        kotlinx.coroutines.runBlocking {
+            val shadowApp = shadowOf(application)
+            shadowApp.grantPermissions(Manifest.permission.ACTIVITY_RECOGNITION)
+
+            val controller = Robolectric.buildService(StepCounterService::class.java)
+            controller.create()
+            val service = controller.get()
+            service.onStartCommand(
+                Intent(application, StepCounterService::class.java).apply {
+                    action = StepCounterService.ACTION_START
+                },
+                0,
+                1
+            )
+
+            // Action Pause
+            service.onStartCommand(
+                Intent(application, StepCounterService::class.java).apply {
+                    action = StepCounterService.ACTION_PAUSE
+                },
+                0,
+                2
+            )
+
+            val pausedState = kotlinx.coroutines.withTimeout(5000) {
+                preferences.isPausedFlow.first { it }
+            }
+            assertTrue(pausedState)
+
+            // Action Resume
+            service.onStartCommand(
+                Intent(application, StepCounterService::class.java).apply {
+                    action = StepCounterService.ACTION_RESUME
+                },
+                0,
+                3
+            )
+
+            val resumedState = kotlinx.coroutines.withTimeout(5000) {
+                preferences.isPausedFlow.first { !it }
+            }
+            assertFalse(resumedState)
+
+            controller.destroy()
+        }
+    }
+
+    @Test
+    fun actionStop_stopsForegroundServiceAndSelf() {
+        val shadowApp = shadowOf(application)
+        shadowApp.grantPermissions(Manifest.permission.ACTIVITY_RECOGNITION)
+
+        val controller = Robolectric.buildService(StepCounterService::class.java)
+        controller.create()
+        val service = controller.get()
+        service.onStartCommand(
+            Intent(application, StepCounterService::class.java).apply {
+                action = StepCounterService.ACTION_START
+            },
+            0,
+            1
+        )
+
+        val stopResult = service.onStartCommand(
+            Intent(application, StepCounterService::class.java).apply {
+                action = StepCounterService.ACTION_STOP
+            },
+            0,
+            2
+        )
+
+        assertEquals(Service.START_NOT_STICKY, stopResult)
+        val shadowService = shadowOf(service)
+        assertTrue(shadowService.isStoppedBySelf)
+
+        controller.destroy()
+    }
+
+    @Test
+    fun bootReceiver_startsServiceWhenPermissionGrantedOnBootCompleted() {
+        val shadowApp = shadowOf(application)
+        shadowApp.grantPermissions(Manifest.permission.ACTIVITY_RECOGNITION)
+
+        val receiver = BootReceiver()
+        val intent = Intent(Intent.ACTION_BOOT_COMPLETED)
+        receiver.onReceive(application, intent)
+
+        val startedServiceIntent = shadowApp.nextStartedService
+        assertNotNull(startedServiceIntent)
+        assertEquals(StepCounterService::class.java.name, startedServiceIntent.component?.className)
+        assertEquals(StepCounterService.ACTION_START, startedServiceIntent.action)
+    }
+
+    @Test
+    fun bootReceiver_startsServiceWhenPermissionGrantedOnPackageReplaced() {
+        val shadowApp = shadowOf(application)
+        shadowApp.grantPermissions(Manifest.permission.ACTIVITY_RECOGNITION)
+
+        val receiver = BootReceiver()
+        val intent = Intent(Intent.ACTION_MY_PACKAGE_REPLACED)
+        receiver.onReceive(application, intent)
+
+        val startedServiceIntent = shadowApp.nextStartedService
+        assertNotNull(startedServiceIntent)
+        assertEquals(StepCounterService::class.java.name, startedServiceIntent.component?.className)
+        assertEquals(StepCounterService.ACTION_START, startedServiceIntent.action)
+    }
+
+    @Test
+    fun onStartCommand_stopsCleanlyWhenSensorNotAvailable() {
+        val shadowApp = shadowOf(application)
+        shadowApp.grantPermissions(Manifest.permission.ACTIVITY_RECOGNITION)
+        val sensorManager = application.getSystemService(Context.SENSOR_SERVICE) as android.hardware.SensorManager
+        val shadowSensorManager = shadowOf(sensorManager)
+        stepSensor?.let { shadowSensorManager.removeSensor(it) }
+
+        val controller = Robolectric.buildService(StepCounterService::class.java)
+        controller.create()
+        val service = controller.get()
+
+        val startCommandResult = service.onStartCommand(
+            Intent(application, StepCounterService::class.java).apply {
+                action = StepCounterService.ACTION_START
+            },
+            0,
+            1
+        )
+
+        assertEquals(Service.START_NOT_STICKY, startCommandResult)
+        assertTrue(shadowOf(service).isStoppedBySelf)
+        controller.destroy()
+    }
+
+    @Test
+    fun bootReceiver_doesNotStartServiceWhenSensorMissing() {
+        val shadowApp = shadowOf(application)
+        shadowApp.grantPermissions(Manifest.permission.ACTIVITY_RECOGNITION)
+        val sensorManager = application.getSystemService(Context.SENSOR_SERVICE) as android.hardware.SensorManager
+        val shadowSensorManager = shadowOf(sensorManager)
+        stepSensor?.let { shadowSensorManager.removeSensor(it) }
+
+        val receiver = BootReceiver()
+        val intent = Intent(Intent.ACTION_BOOT_COMPLETED)
+        receiver.onReceive(application, intent)
+
+        val startedServiceIntent = shadowApp.nextStartedService
+        assertNull(startedServiceIntent)
+    }
+
+    @Test
+    fun bootReceiver_doesNotStartServiceWhenPermissionDenied() {
+        val shadowApp = shadowOf(application)
+        shadowApp.denyPermissions(Manifest.permission.ACTIVITY_RECOGNITION)
+
+        val receiver = BootReceiver()
+        val intent = Intent(Intent.ACTION_BOOT_COMPLETED)
+        receiver.onReceive(application, intent)
+
+        val startedServiceIntent = shadowApp.nextStartedService
+        assertNull(startedServiceIntent)
+    }
+}
+
+
+================================================================================
+FILE [25/27]: app/src/test/kotlin/com/nordic/stepcounter/ui/StepViewModelTest.kt
+================================================================================
+
+package com.nordic.stepcounter.ui
+
+import com.nordic.stepcounter.data.local.DailyStepEntity
+import com.nordic.stepcounter.data.local.HourlyStepEntity
+import com.nordic.stepcounter.data.preferences.AppTheme
+import com.nordic.stepcounter.data.preferences.UserProfile
+import com.nordic.stepcounter.data.repository.StepRepository
+import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.mockk
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class StepViewModelTest {
+
+    private val testDispatcher = UnconfinedTestDispatcher()
+    private lateinit var repository: StepRepository
+
+    @Before
+    fun setup() {
+        Dispatchers.setMain(testDispatcher)
+        repository = mockk(relaxed = true)
+        every { repository.userProfileFlow } returns flowOf(UserProfile())
+        every { repository.getDailyRecordFlow(any()) } returns flowOf(null)
+        every { repository.getRecentDailyRecordsFlow(any()) } returns flowOf(emptyList())
+        every { repository.getHourlyRecordsFlow(any()) } returns flowOf(emptyList())
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `uiState combines profile, daily steps, and theme accurately`() = runTest {
+        val testProfile = UserProfile(
+            heightCm = 180f,
+            weightKg = 75f,
+            isMale = true,
+            customStrideLengthMeters = 0.75f,
+            dailyGoal = 8000,
+            isPaused = false,
+            lastSensorStepValue = 1000L,
+            appTheme = AppTheme.CATPPUCCIN_DARK
+        )
+        val testDaily = DailyStepEntity(
+            date = "2026-11-10",
+            steps = 4000,
+            distanceMeters = 3000f,
+            caloriesKcal = 225f,
+            activeDurationSeconds = 2400L,
+            goalSteps = 8000
+        )
+        val hourlyList = listOf(
+            HourlyStepEntity("2026-11-10", 8, 1000),
+            HourlyStepEntity("2026-11-10", 9, 3000)
+        )
+        val recentList = listOf(testDaily)
+
+        every { repository.userProfileFlow } returns flowOf(testProfile)
+        every { repository.getDailyRecordFlow(any()) } returns flowOf(testDaily)
+        every { repository.getRecentDailyRecordsFlow(any()) } returns flowOf(recentList)
+        every { repository.getHourlyRecordsFlow(any()) } returns flowOf(hourlyList)
+
+        val viewModel = StepViewModel(repository, currentDateProvider = { "2026-11-10" })
+        val state = viewModel.uiState.first { it.todaySteps == 4000 }
+
+        assertEquals(4000, state.todaySteps)
+        assertEquals(8000, state.dailyGoal)
+        assertEquals(0.5f, state.goalProgress, 0.001f)
+        assertEquals(3.0f, state.distanceKm, 0.01f)
+        assertEquals(225f, state.caloriesKcal, 0.1f)
+        assertEquals(40, state.activeMinutes)
+        assertFalse(state.isPaused)
+        assertEquals(AppTheme.CATPPUCCIN_DARK, state.appTheme)
+        assertEquals(AppTheme.CATPPUCCIN_DARK, state.currentTheme)
+        assertEquals(180f, state.heightCm, 0.01f)
+        assertEquals(75f, state.weightKg, 0.01f)
+        assertTrue(state.isMale)
+        assertEquals(0.75f, state.customStrideMeters, 0.01f)
+        assertEquals(0.75f, state.effectiveStrideMeters, 0.01f)
+        assertEquals(1, state.recentRecords.size)
+        assertEquals(1, state.weeklyRecords.size)
+        assertEquals(1, state.monthlyRecords.size)
+        assertEquals(2, state.hourlyToday.size)
+        assertTrue(state.isTrackingActive)
+    }
+
+    @Test
+    fun `togglePause inverts isPaused status and notifies repository`() = runTest {
+        val testProfile = UserProfile(isPaused = false)
+        every { repository.userProfileFlow } returns flowOf(testProfile)
+        every { repository.getDailyRecordFlow(any()) } returns flowOf(null)
+        every { repository.getRecentDailyRecordsFlow(any()) } returns flowOf(emptyList())
+        every { repository.getHourlyRecordsFlow(any()) } returns flowOf(emptyList())
+
+        val viewModel = StepViewModel(repository)
+        viewModel.togglePause()
+
+        coVerify { repository.setPaused(true) }
+    }
+
+    @Test
+    fun `setPaused directly updates paused state`() = runTest {
+        val viewModel = StepViewModel(repository)
+        viewModel.setPaused(true)
+        coVerify { repository.setPaused(true) }
+
+        viewModel.setPaused(false)
+        coVerify { repository.setPaused(false) }
+    }
+
+    @Test
+    fun `updateDailyGoal and updateGoal update repository daily goal`() = runTest {
+        val viewModel = StepViewModel(repository)
+        viewModel.updateDailyGoal(10000)
+        coVerify { repository.updateDailyGoal(10000) }
+
+        viewModel.updateGoal(12000)
+        coVerify { repository.updateDailyGoal(12000) }
+    }
+
+    @Test
+    fun `updatePhysicalProfile and updateProfile delegate to repository`() = runTest {
+        val viewModel = StepViewModel(repository)
+        viewModel.updatePhysicalProfile(182f, 78f, false, 0.78f)
+        coVerify {
+            repository.updatePhysicalProfile(182f, 78f, false, 0.78f)
+        }
+
+        viewModel.updateProfile(170f, 65f, true, 0.70f)
+        coVerify {
+            repository.updatePhysicalProfile(170f, 65f, true, 0.70f)
+        }
+    }
+
+    @Test
+    fun `selectTheme and updateAppTheme update theme in repository`() = runTest {
+        val viewModel = StepViewModel(repository)
+        viewModel.updateAppTheme(AppTheme.GRUVBOX_DARK)
+        coVerify { repository.updateAppTheme(AppTheme.GRUVBOX_DARK) }
+
+        viewModel.selectTheme(AppTheme.TOKYONIGHT_LIGHT)
+        coVerify { repository.updateAppTheme(AppTheme.TOKYONIGHT_LIGHT) }
+    }
+
+    @Test
+    fun `goalProgress clamps correctly at 0 and 1`() = runTest {
+        val testProfile = UserProfile(dailyGoal = 5000)
+        val overDaily = DailyStepEntity(
+            date = "2026-11-10",
+            steps = 7500,
+            distanceMeters = 5000f,
+            caloriesKcal = 350f,
+            activeDurationSeconds = 3000L,
+            goalSteps = 5000
+        )
+        every { repository.userProfileFlow } returns flowOf(testProfile)
+        every { repository.getDailyRecordFlow(any()) } returns flowOf(overDaily)
+        every { repository.getRecentDailyRecordsFlow(any()) } returns flowOf(emptyList())
+        every { repository.getHourlyRecordsFlow(any()) } returns flowOf(emptyList())
+
+        val viewModel = StepViewModel(repository, currentDateProvider = { "2026-11-10" })
+        val state = viewModel.uiState.first { it.todaySteps == 7500 }
+
+        assertEquals(1.0f, state.goalProgress, 0.001f)
+    }
+
+    @Test
+    fun `setTrackingActive toggles tracking flag in uiState`() = runTest {
+        val viewModel = StepViewModel(repository)
+        viewModel.setTrackingActive(false)
+        val state = viewModel.uiState.first { !it.isTrackingActive }
+        assertFalse(state.isTrackingActive)
+    }
+
+    @Test
+    fun `dateRollover updates uiState to observe new date and initializes record`() = runTest {
+        val day1Record = DailyStepEntity(
+            date = "2026-11-10",
+            steps = 5000,
+            distanceMeters = 3500f,
+            caloriesKcal = 250f,
+            activeDurationSeconds = 3000L,
+            goalSteps = 8000
+        )
+        val day2Record = DailyStepEntity(
+            date = "2026-11-11",
+            steps = 200,
+            distanceMeters = 150f,
+            caloriesKcal = 10f,
+            activeDurationSeconds = 120L,
+            goalSteps = 8000
+        )
+
+        val dateFlow = kotlinx.coroutines.flow.MutableStateFlow("2026-11-10")
+        every { repository.getDailyRecordFlow("2026-11-10") } returns flowOf(day1Record)
+        every { repository.getDailyRecordFlow("2026-11-11") } returns flowOf(day2Record)
+
+        val viewModel = StepViewModel(repository, currentDateFlow = dateFlow)
+        val state1 = viewModel.uiState.first { it.todaySteps == 5000 }
+        assertEquals(5000, state1.todaySteps)
+        assertEquals("2026-11-10", state1.currentDate)
+
+        // Rollover to next day
+        dateFlow.value = "2026-11-11"
+        val state2 = viewModel.uiState.first { it.todaySteps == 200 }
+        assertEquals(200, state2.todaySteps)
+        assertEquals("2026-11-11", state2.currentDate)
+
+        coVerify { repository.initializeTodayRecord("2026-11-10") }
+        coVerify { repository.initializeTodayRecord("2026-11-11") }
+    }
+
+    @Test
+    fun `Factory creates StepViewModel instance`() {
+        val factory = StepViewModel.Factory(repository)
+        val vm = factory.create(StepViewModel::class.java)
+        assertNotNull(vm)
+
+        val companionFactory = StepViewModel.provideFactory(repository)
+        val vmCompanion = companionFactory.create(StepViewModel::class.java)
+        assertNotNull(vmCompanion)
+    }
+}
+
+
+================================================================================
+FILE [26/27]: build.gradle.kts
+================================================================================
+
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+plugins {
+  alias(libs.plugins.android.application) apply false
+  alias(libs.plugins.compose.compiler) apply false
+  alias(libs.plugins.ksp) apply false
+}
+
+
+================================================================================
+FILE [27/27]: gradle/libs.versions.toml
+================================================================================
+
+[versions]
+androidGradlePlugin = "9.0.1"
+androidxCore = "1.15.0"
+androidxLifecycle = "2.8.7"
+androidxActivity = "1.9.3"
+androidxComposeBom = "2024.12.01"
+androidxTest = "1.6.1"
+androidxTestExt = "1.2.1"
+androidxTestRunner = "1.6.1"
+androidxTestEspresso = "3.6.1"
+coroutines = "1.10.1"
+junit = "4.13.2"
+kotlin = "2.3.20"
+ksp = "2.3.13"
+room = "2.7.0"
+datastore = "1.1.2"
+mockk = "1.13.13"
+robolectric = "4.14.1"
+
+[libraries]
+androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivity" }
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "androidxComposeBom" }
+androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
+androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
+androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
+androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
+androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "androidxLifecycle" }
+androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "androidxLifecycle" }
+androidx-lifecycle-runtime-ktx = { module = "androidx.lifecycle:lifecycle-runtime-ktx", version.ref = "androidxLifecycle" }
+androidx-test-core = { module = "androidx.test:core", version.ref = "androidxTest" }
+androidx-test-core-ktx = { module = "androidx.test:core-ktx", version.ref = "androidxTest" }
+androidx-test-ext-junit = { module = "androidx.test.ext:junit", version.ref = "androidxTestExt" }
+androidx-test-espresso-core = { module = "androidx.test.espresso:espresso-core", version.ref = "androidxTestEspresso" }
+androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidxTestRunner" }
+androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
+androidx-room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
+androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+androidx-room-testing = { module = "androidx.room:room-testing", version.ref = "room" }
+androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
+kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
+junit = { module = "junit:junit", version.ref = "junit" }
+mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "androidGradlePlugin" }
+compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

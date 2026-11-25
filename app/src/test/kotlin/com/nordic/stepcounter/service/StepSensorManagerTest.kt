@@ -129,4 +129,60 @@ class StepSensorManagerTest {
 
         assertEquals(-1L, receivedSteps)
     }
+
+    @Test
+    fun startListening_preventsDuplicateListenerRegistrations() {
+        val mockSensorManager = mockk<SensorManager>(relaxed = true)
+        val mockSensor = mockk<Sensor>()
+        every { mockSensor.type } returns Sensor.TYPE_STEP_COUNTER
+        every { mockSensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) } returns mockSensor
+        every {
+            mockSensorManager.registerListener(
+                any(),
+                mockSensor,
+                SensorManager.SENSOR_DELAY_NORMAL,
+                60_000_000
+            )
+        } returns true
+
+        val manager = StepSensorManager(mockSensorManager)
+        assertTrue(manager.startListening())
+        assertTrue(manager.startListening())
+
+        verify(exactly = 1) {
+            mockSensorManager.registerListener(
+                manager,
+                mockSensor,
+                SensorManager.SENSOR_DELAY_NORMAL,
+                60_000_000
+            )
+        }
+    }
+
+    @Test
+    fun flushAndWait_completesWhenOnFlushCompletedFires() = runTest {
+        val mockSensorManager = mockk<SensorManager>(relaxed = true)
+        val mockSensor = mockk<Sensor>()
+        every { mockSensorManager.flush(any()) } answers {
+            val listener = firstArg<StepSensorManager>()
+            listener.onFlushCompleted(mockSensor)
+            true
+        }
+
+        val manager = StepSensorManager(mockSensorManager)
+        val result = manager.flushAndWait(timeoutMs = 100L)
+        assertTrue(result)
+        verify(exactly = 1) { mockSensorManager.flush(manager) }
+    }
+
+    @Test
+    fun flushAndWait_timesOutSafelyWhenOnFlushCompletedDoesNotFire() = runTest {
+        val mockSensorManager = mockk<SensorManager>(relaxed = true)
+        every { mockSensorManager.flush(any()) } returns true
+
+        val manager = StepSensorManager(mockSensorManager)
+        val result = manager.flushAndWait(timeoutMs = 50L)
+        assertTrue(result)
+        verify(exactly = 1) { mockSensorManager.flush(manager) }
+    }
 }

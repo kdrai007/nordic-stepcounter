@@ -61,9 +61,9 @@ class StepRepository(
      */
     suspend fun initializeTodayRecord(
         date: String = LocalDate.now().toString()
-    ): DailyStepEntity {
+    ): DailyStepEntity = sensorMutex.withLock {
         val existing = stepDao.getDailyRecordDirect(date)
-        if (existing != null) return existing
+        if (existing != null) return@withLock existing
 
         val profile = preferences.userProfileFlow.first()
         val initial = DailyStepEntity(
@@ -75,7 +75,7 @@ class StepRepository(
             goalSteps = profile.dailyGoal
         )
         stepDao.upsertDaily(initial)
-        return initial
+        return@withLock initial
     }
 
     /**
@@ -104,7 +104,8 @@ class StepRepository(
 
         val existingDaily = stepDao.getDailyRecordDirect(date)
         val baseSteps = existingDaily?.steps ?: 0
-        val newTotalSteps = baseSteps + deltaResult.stepsToAdd
+        val newTotalSteps = (baseSteps.toLong() + deltaResult.stepsToAdd)
+            .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
 
         val strideMeters = profile.effectiveStrideLengthMeters
         val distanceMeters = StepCalculationEngine.calculateDistanceKm(newTotalSteps, strideMeters) * 1000f
@@ -119,31 +120,34 @@ class StepRepository(
             activeDurationSeconds = activeDurationSeconds,
             goalSteps = profile.dailyGoal
         )
-        stepDao.upsertDaily(updatedDaily)
 
-        if (deltaResult.stepsToAdd > 0) {
+        val hourlyEntity = if (deltaResult.stepsToAdd > 0) {
             val existingHourly = stepDao.getHourlyRecordDirect(date, hour)
-            val newHourlySteps = (existingHourly?.steps ?: 0) + deltaResult.stepsToAdd
-            stepDao.upsertHourly(
-                HourlyStepEntity(
-                    date = date,
-                    hour = hour,
-                    steps = newHourlySteps
-                )
+            val newHourlySteps = ((existingHourly?.steps ?: 0).toLong() + deltaResult.stepsToAdd)
+                .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+            HourlyStepEntity(
+                date = date,
+                hour = hour,
+                steps = newHourlySteps
             )
+        } else {
+            null
         }
+
+        stepDao.upsertDailyAndHourly(updatedDaily, hourlyEntity)
 
         return@withLock updatedDaily
     }
 
-    suspend fun setPaused(isPaused: Boolean) {
+    suspend fun setPaused(isPaused: Boolean) = sensorMutex.withLock {
         preferences.setPaused(isPaused)
     }
 
-    suspend fun updateDailyGoal(goal: Int) {
-        preferences.updateDailyGoal(goal)
+    suspend fun updateDailyGoal(goal: Int) = sensorMutex.withLock {
+        val safeGoal = goal.coerceIn(1_000, 100_000)
+        preferences.updateDailyGoal(safeGoal)
         val today = LocalDate.now().toString()
-        val affected = stepDao.updateDailyGoal(today, goal)
+        val affected = stepDao.updateDailyGoal(today, safeGoal)
         if (affected == 0) {
             val existing = stepDao.getDailyRecordDirect(today)
             if (existing == null) {
@@ -154,7 +158,7 @@ class StepRepository(
                         distanceMeters = 0f,
                         caloriesKcal = 0f,
                         activeDurationSeconds = 0L,
-                        goalSteps = goal
+                        goalSteps = safeGoal
                     )
                 )
             }

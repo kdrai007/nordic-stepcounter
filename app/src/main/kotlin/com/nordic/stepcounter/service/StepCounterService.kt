@@ -16,14 +16,16 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.nordic.stepcounter.MainActivity
-import com.nordic.stepcounter.data.local.StepDatabase
-import com.nordic.stepcounter.data.preferences.ProfilePreferences
+import com.nordic.stepcounter.R
 import com.nordic.stepcounter.data.repository.StepRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
@@ -49,11 +51,18 @@ class StepCounterService : Service() {
                 true
             }
         }
+
+        fun hasStepCounterSensor(context: Context): Boolean {
+            val sm = context.getSystemService(Context.SENSOR_SERVICE) as? android.hardware.SensorManager
+            return sm?.getDefaultSensor(android.hardware.Sensor.TYPE_STEP_COUNTER) != null
+        }
     }
 
     internal var serviceScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     internal lateinit var repository: StepRepository
     internal lateinit var sensorManager: StepSensorManager
+    @Volatile
+    private var lastSensorJob: Job? = null
     private var isForegroundStarted = false
 
     override fun onCreate() {
@@ -68,11 +77,22 @@ class StepCounterService : Service() {
         createNotificationChannel()
 
         sensorManager = StepSensorManager(this) { rawSteps ->
-            serviceScope.launch {
+            lastSensorJob = serviceScope.launch {
                 val updatedDaily = repository.processHardwareSensorReading(rawSteps)
                 val profile = repository.userProfileFlow.first()
                 updateNotification(updatedDaily.steps, updatedDaily.goalSteps, profile.isPaused)
             }
+        }
+
+        serviceScope.launch {
+            repository.userProfileFlow
+                .map { it.isPaused to it.dailyGoal }
+                .distinctUntilChanged()
+                .collect {
+                    if (isForegroundStarted) {
+                        updateNotificationForCurrentState()
+                    }
+                }
         }
     }
 
@@ -83,7 +103,9 @@ class StepCounterService : Service() {
         }
 
         if (intent?.action != ACTION_STOP && !isForegroundStarted) {
-            startTracking()
+            if (!startTracking()) {
+                return START_NOT_STICKY
+            }
         }
 
         when (intent?.action) {
@@ -93,48 +115,61 @@ class StepCounterService : Service() {
             }
             ACTION_PAUSE -> {
                 serviceScope.launch {
+                    if (::sensorManager.isInitialized) {
+                        sensorManager.flushAndWait()
+                    }
+                    lastSensorJob?.join()
                     repository.setPaused(true)
                     updateNotificationForCurrentState()
                 }
             }
             ACTION_RESUME -> {
                 serviceScope.launch {
+                    if (::sensorManager.isInitialized) {
+                        sensorManager.flushAndWait()
+                    }
+                    lastSensorJob?.join()
                     repository.setPaused(false)
                     updateNotificationForCurrentState()
                 }
             }
             ACTION_TOGGLE_PAUSE -> {
                 serviceScope.launch {
+                    if (::sensorManager.isInitialized) {
+                        sensorManager.flushAndWait()
+                    }
+                    lastSensorJob?.join()
                     val profile = repository.userProfileFlow.first()
                     val newPaused = !profile.isPaused
                     repository.setPaused(newPaused)
                     updateNotificationForCurrentState()
                 }
             }
-            ACTION_START, null -> {
-                startTracking()
-            }
             else -> {
-                startTracking()
+                // Foreground started above if action != ACTION_STOP
             }
         }
 
         return START_STICKY
     }
 
-    private fun startTracking() {
+    private fun startTracking(): Boolean {
         if (!isForegroundStarted) {
             val initialNotification = buildNotification(steps = 0, goal = 6000, isPaused = false)
             promoteToForeground(initialNotification)
             isForegroundStarted = true
         }
 
-        sensorManager.startListening()
+        if (!sensorManager.isSensorAvailable || !sensorManager.startListening()) {
+            handleStop()
+            return false
+        }
 
         serviceScope.launch {
             repository.initializeTodayRecord()
             updateNotificationForCurrentState()
         }
+        return true
     }
 
     private fun handleStop() {
@@ -194,12 +229,12 @@ class StepCounterService : Service() {
         )
 
         val percent = if (goal > 0) ((steps * 100) / goal).coerceAtMost(100) else 0
-        val statusText = if (isPaused) "Paused • $percent% of goal" else "$percent% of $goal goal"
+        val statusText = if (isPaused) "Paused • $percent% of goal" else "$percent% of ${"%,d".format(goal)} goal"
         val actionLabel = if (isPaused) "Resume" else "Pause"
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_menu_directions)
-            .setContentTitle("$steps STEPS")
+            .setSmallIcon(R.drawable.ic_tab_today)
+            .setContentTitle("%,d STEPS".format(steps))
             .setContentText(statusText)
             .setOngoing(true)
             .setSilent(true)

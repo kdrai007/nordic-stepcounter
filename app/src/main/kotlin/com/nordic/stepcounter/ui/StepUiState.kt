@@ -4,6 +4,7 @@ import com.nordic.stepcounter.data.local.DailyStepEntity
 import com.nordic.stepcounter.data.local.HourlyStepEntity
 import com.nordic.stepcounter.data.preferences.AppTheme
 import com.nordic.stepcounter.data.preferences.UserProfile
+import java.time.LocalDate
 
 data class StepUiState(
     val todaySteps: Int = 0,
@@ -24,7 +25,8 @@ data class StepUiState(
     val monthlyRecords: List<DailyStepEntity> = emptyList(),
     val hourlyToday: List<HourlyStepEntity> = emptyList(),
     val userProfile: UserProfile = UserProfile(),
-    val isTrackingActive: Boolean = true
+    val isTrackingActive: Boolean = true,
+    val currentDate: String = LocalDate.now().toString()
 ) {
     val currentTheme: AppTheme get() = appTheme
 }
