@@ -2,4 +2,10 @@
 <resources>
 
     <style name="Theme.NordicStepCounter" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <style name="Theme.NordicStepCounter.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#0A0A0A</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_round</item>
+        <item name="postSplashScreenTheme">@style/Theme.NordicStepCounter</item>
+    </style>
 </resources>

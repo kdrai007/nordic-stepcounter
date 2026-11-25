@@ -2,5 +2,4 @@
 <full-backup-content>
     <include domain="database" path="."/>
     <include domain="file" path="."/>
-    <exclude domain="file" path="datastore/nordic_user_preferences.preferences_pb"/>
 </full-backup-content>

@@ -42,6 +42,11 @@ android {
     unitTests.isIncludeAndroidResources = true
   }
 
+  sourceSets {
+    getByName("test").assets.directories.add("$projectDir/schemas")
+    getByName("androidTest").assets.directories.add("$projectDir/schemas")
+  }
+
   packaging {
     resources {
       excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -53,6 +58,10 @@ kotlin {
   jvmToolchain(21)
 }
 
+ksp {
+  arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
   val composeBom = platform(libs.androidx.compose.bom)
   implementation(composeBom)
@@ -60,6 +69,7 @@ dependencies {
 
   // Core Android dependencies
   implementation(libs.androidx.core.ktx)
+  implementation(libs.androidx.core.splashscreen)
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.activity.compose)
 

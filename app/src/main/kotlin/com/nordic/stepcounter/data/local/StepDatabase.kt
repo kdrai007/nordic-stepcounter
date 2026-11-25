@@ -4,12 +4,44 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [DailyStepEntity::class, HourlyStepEntity::class], version = 1, exportSchema = false)
+@Database(
+    entities = [
+        DailyStepEntity::class,
+        HourlyStepEntity::class,
+        SensorStateEntity::class
+    ],
+    version = 2,
+    exportSchema = true
+)
 abstract class StepDatabase : RoomDatabase() {
     abstract fun stepDao(): StepDao
 
     companion object {
+        val MIGRATION_1_2: Migration = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `sensor_state` (
+                        `id` INTEGER NOT NULL,
+                        `lastSensorStepValue` INTEGER NOT NULL,
+                        `lastBootCount` INTEGER NOT NULL,
+                        `lastRecordedDate` TEXT NOT NULL,
+                        `lastEventTimestampMs` INTEGER NOT NULL,
+                        `isPaused` INTEGER NOT NULL,
+                        `pendingResumeBaseline` INTEGER NOT NULL,
+                        `installationId` TEXT NOT NULL,
+                        `downtimeGapFromDate` TEXT NOT NULL,
+                        `downtimeGapToDate` TEXT NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
         @Volatile
         private var INSTANCE: StepDatabase? = null
 
@@ -19,7 +51,10 @@ abstract class StepDatabase : RoomDatabase() {
                     context.applicationContext,
                     StepDatabase::class.java,
                     "nordic_steps.db"
-                ).build().also { INSTANCE = it }
+                )
+                    .addMigrations(MIGRATION_1_2)
+                    .build()
+                    .also { INSTANCE = it }
             }
         }
     }

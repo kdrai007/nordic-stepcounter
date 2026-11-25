@@ -6,7 +6,7 @@ import android.hardware.SensorManager
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -19,7 +19,11 @@ import java.lang.reflect.Field
 @RunWith(RobolectricTestRunner::class)
 class StepSensorManagerTest {
 
-    private fun createSensorEvent(sensorType: Int, value: Float): SensorEvent {
+    private fun createSensorEvent(
+        sensorType: Int,
+        value: Float,
+        timestampNanos: Long = 123_456_789L
+    ): SensorEvent {
         val constructor = SensorEvent::class.java.declaredConstructors.first()
         constructor.isAccessible = true
         val params = constructor.parameterTypes
@@ -37,6 +41,10 @@ class StepSensorManagerTest {
         valuesField.isAccessible = true
         valuesField.set(event, floatArrayOf(value))
 
+        val timestampField: Field = SensorEvent::class.java.getField("timestamp")
+        timestampField.isAccessible = true
+        timestampField.setLong(event, timestampNanos)
+
         val mockSensor = mockk<Sensor>()
         every { mockSensor.type } returns sensorType
 
@@ -47,34 +55,69 @@ class StepSensorManagerTest {
         return event
     }
 
+    private fun mockStepSensor(fifoMaxEventCount: Int = 3000): Sensor {
+        val sensor = mockk<Sensor>()
+        every { sensor.type } returns Sensor.TYPE_STEP_COUNTER
+        every { sensor.fifoMaxEventCount } returns fifoMaxEventCount
+        return sensor
+    }
+
     @Test
-    fun startListening_registersListenerWithBatchLatencyWhenSensorExists() {
+    fun startListening_registersWithBatchLatencyAndFlushesImmediately() {
         val mockSensorManager = mockk<SensorManager>(relaxed = true)
-        val mockSensor = mockk<Sensor>()
-        every { mockSensor.type } returns Sensor.TYPE_STEP_COUNTER
+        val mockSensor = mockStepSensor(fifoMaxEventCount = 3000)
         every { mockSensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) } returns mockSensor
         every {
-            mockSensorManager.registerListener(
-                any(),
-                mockSensor,
-                SensorManager.SENSOR_DELAY_NORMAL,
-                60_000_000
-            )
+            mockSensorManager.registerListener(any(), mockSensor, SensorManager.SENSOR_DELAY_NORMAL, 60_000_000)
         } returns true
 
         val manager = StepSensorManager(mockSensorManager)
         assertTrue(manager.isSensorAvailable)
-
-        val success = manager.startListening()
-        assertTrue(success)
+        assertTrue(manager.startListening())
 
         verify(exactly = 1) {
-            mockSensorManager.registerListener(
-                manager,
-                mockSensor,
-                SensorManager.SENSOR_DELAY_NORMAL,
-                60_000_000
-            )
+            mockSensorManager.registerListener(manager, mockSensor, SensorManager.SENSOR_DELAY_NORMAL, 60_000_000)
+        }
+        verify(exactly = 1) { mockSensorManager.flush(manager) }
+    }
+
+    @Test
+    fun setForegroundMode_switchesBetweenZeroLatencyAndBatching() {
+        val mockSensorManager = mockk<SensorManager>(relaxed = true)
+        val mockSensor = mockStepSensor(fifoMaxEventCount = 3000)
+        every { mockSensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) } returns mockSensor
+        every {
+            mockSensorManager.registerListener(any(), mockSensor, SensorManager.SENSOR_DELAY_NORMAL, any<Int>())
+        } returns true
+
+        val manager = StepSensorManager(mockSensorManager)
+        assertTrue(manager.startListening(foregroundMode = false))
+        assertTrue(manager.setForegroundMode(true))
+        assertTrue(manager.setForegroundMode(false))
+
+        verify(exactly = 2) {
+            mockSensorManager.registerListener(manager, mockSensor, SensorManager.SENSOR_DELAY_NORMAL, 60_000_000)
+        }
+        verify(exactly = 1) {
+            mockSensorManager.registerListener(manager, mockSensor, SensorManager.SENSOR_DELAY_NORMAL, 0)
+        }
+        verify(exactly = 2) { mockSensorManager.unregisterListener(manager) }
+    }
+
+    @Test
+    fun startListening_usesZeroLatencyInBackgroundWhenSensorHasNoFifo() {
+        val mockSensorManager = mockk<SensorManager>(relaxed = true)
+        val mockSensor = mockStepSensor(fifoMaxEventCount = 0)
+        every { mockSensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) } returns mockSensor
+        every {
+            mockSensorManager.registerListener(any(), mockSensor, SensorManager.SENSOR_DELAY_NORMAL, 0)
+        } returns true
+
+        val manager = StepSensorManager(mockSensorManager)
+        assertTrue(manager.startListening(foregroundMode = false))
+
+        verify(exactly = 1) {
+            mockSensorManager.registerListener(manager, mockSensor, SensorManager.SENSOR_DELAY_NORMAL, 0)
         }
     }
 
@@ -100,49 +143,46 @@ class StepSensorManagerTest {
     }
 
     @Test
-    fun onSensorChanged_invokesCallbackAndEmitsFlowForStepCounter() = runTest {
+    fun onSensorChanged_roundsAndPassesReadingWithTimestampForStepCounter() {
         val mockSensorManager = mockk<SensorManager>(relaxed = true)
-        var receivedSteps = 0L
+        var received: StepSensorReading? = null
 
-        val manager = StepSensorManager(mockSensorManager) { steps ->
-            receivedSteps = steps
+        val manager = StepSensorManager(mockSensorManager) { reading ->
+            received = reading
         }
 
-        val event = createSensorEvent(Sensor.TYPE_STEP_COUNTER, 45200f)
+        val event = createSensorEvent(Sensor.TYPE_STEP_COUNTER, 45200.6f, timestampNanos = 999_888_777L)
         manager.onSensorChanged(event)
 
-        assertEquals(45200L, receivedSteps)
-        assertEquals(45200L, manager.stepEvents.first())
+        assertEquals(45201L, received?.totalStepsSinceBoot)
+        assertEquals(999_888_777L, received?.timestampNanos)
     }
 
     @Test
-    fun onSensorChanged_ignoresOtherSensorTypes() = runTest {
+    fun onSensorChanged_ignoresNaNInfinityNegativeAndOtherSensors() {
         val mockSensorManager = mockk<SensorManager>(relaxed = true)
-        var receivedSteps = -1L
+        val received = mutableListOf<StepSensorReading>()
 
-        val manager = StepSensorManager(mockSensorManager) { steps ->
-            receivedSteps = steps
+        val manager = StepSensorManager(mockSensorManager) { reading ->
+            received.add(reading)
         }
 
-        val event = createSensorEvent(Sensor.TYPE_ACCELEROMETER, 9.8f)
-        manager.onSensorChanged(event)
+        manager.onSensorChanged(createSensorEvent(Sensor.TYPE_STEP_COUNTER, Float.NaN))
+        manager.onSensorChanged(createSensorEvent(Sensor.TYPE_STEP_COUNTER, Float.POSITIVE_INFINITY))
+        manager.onSensorChanged(createSensorEvent(Sensor.TYPE_STEP_COUNTER, Float.NEGATIVE_INFINITY))
+        manager.onSensorChanged(createSensorEvent(Sensor.TYPE_STEP_COUNTER, -5f))
+        manager.onSensorChanged(createSensorEvent(Sensor.TYPE_ACCELEROMETER, 9.8f))
 
-        assertEquals(-1L, receivedSteps)
+        assertTrue(received.isEmpty())
     }
 
     @Test
-    fun startListening_preventsDuplicateListenerRegistrations() {
+    fun startListening_preventsDuplicateListenerRegistrationsInSameMode() {
         val mockSensorManager = mockk<SensorManager>(relaxed = true)
-        val mockSensor = mockk<Sensor>()
-        every { mockSensor.type } returns Sensor.TYPE_STEP_COUNTER
+        val mockSensor = mockStepSensor()
         every { mockSensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) } returns mockSensor
         every {
-            mockSensorManager.registerListener(
-                any(),
-                mockSensor,
-                SensorManager.SENSOR_DELAY_NORMAL,
-                60_000_000
-            )
+            mockSensorManager.registerListener(any(), mockSensor, SensorManager.SENSOR_DELAY_NORMAL, 60_000_000)
         } returns true
 
         val manager = StepSensorManager(mockSensorManager)
@@ -150,17 +190,12 @@ class StepSensorManagerTest {
         assertTrue(manager.startListening())
 
         verify(exactly = 1) {
-            mockSensorManager.registerListener(
-                manager,
-                mockSensor,
-                SensorManager.SENSOR_DELAY_NORMAL,
-                60_000_000
-            )
+            mockSensorManager.registerListener(manager, mockSensor, SensorManager.SENSOR_DELAY_NORMAL, 60_000_000)
         }
     }
 
     @Test
-    fun flushAndWait_completesWhenOnFlushCompletedFires() = runTest {
+    fun flushAndWait_returnsTrueOnCompletionAndFalseOnTimeoutOrStopListening() = runTest {
         val mockSensorManager = mockk<SensorManager>(relaxed = true)
         val mockSensor = mockk<Sensor>()
         every { mockSensorManager.flush(any()) } answers {
@@ -170,19 +205,23 @@ class StepSensorManagerTest {
         }
 
         val manager = StepSensorManager(mockSensorManager)
-        val result = manager.flushAndWait(timeoutMs = 100L)
-        assertTrue(result)
-        verify(exactly = 1) { mockSensorManager.flush(manager) }
-    }
+        assertTrue(manager.flushAndWait(timeoutMs = 100L))
 
-    @Test
-    fun flushAndWait_timesOutSafelyWhenOnFlushCompletedDoesNotFire() = runTest {
-        val mockSensorManager = mockk<SensorManager>(relaxed = true)
+        // Timeout case returns false
         every { mockSensorManager.flush(any()) } returns true
+        assertFalse(manager.flushAndWait(timeoutMs = 30L))
 
-        val manager = StepSensorManager(mockSensorManager)
-        val result = manager.flushAndWait(timeoutMs = 50L)
-        assertTrue(result)
-        verify(exactly = 1) { mockSensorManager.flush(manager) }
+        // Flush not initiated returns false immediately
+        every { mockSensorManager.flush(any()) } returns false
+        assertFalse(manager.flushAndWait(timeoutMs = 100L))
+
+        // stopListening interrupts pending flushAndWait immediately
+        every { mockSensorManager.flush(any()) } answers {
+            true
+        }
+        val deferred = async { manager.flushAndWait(timeoutMs = 5_000L) }
+        kotlinx.coroutines.yield()
+        manager.stopListening()
+        assertFalse(deferred.await())
     }
 }

@@ -1,35 +1,49 @@
 package com.nordic.stepcounter.data.preferences
 
-import android.content.Context
-import androidx.test.core.app.ApplicationProvider
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import java.util.UUID
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 class ProfilePreferencesTest {
 
-    private lateinit var context: Context
+    @Rule
+    @JvmField
+    val tempFolder = TemporaryFolder()
+
+    private lateinit var testDataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>
     private lateinit var profilePreferences: ProfilePreferences
 
     @Before
-    fun setUp() = runTest {
-        context = ApplicationProvider.getApplicationContext()
-        profilePreferences = ProfilePreferences(context)
-        profilePreferences.clear()
-    }
-
-    @After
-    fun tearDown() = runTest {
-        profilePreferences.clear()
+    fun setUp() {
+        val dataStoreScope = TestScope(UnconfinedTestDispatcher())
+        val prefsFile = tempFolder.newFile("prefs_${UUID.randomUUID()}.preferences_pb")
+        testDataStore = PreferenceDataStoreFactory.create(
+            scope = dataStoreScope,
+            produceFile = { prefsFile }
+        )
+        profilePreferences = ProfilePreferences(testDataStore)
     }
 
     @Test
@@ -41,11 +55,7 @@ class ProfilePreferencesTest {
         assertTrue(profile.isMale)
         assertEquals(0.0f, profile.customStrideLengthMeters, 0.001f)
         assertEquals(6000, profile.dailyGoal)
-        assertFalse(profile.isPaused)
-        assertEquals(-1L, profile.lastSensorStepValue)
-        assertEquals("", profile.lastRecordedDate)
         assertEquals(0.72625f, profile.effectiveStrideLengthMeters, 0.001f)
-        assertEquals(profile.effectiveStrideLengthMeters, profile.effectiveStrideMeters, 0.001f)
         assertEquals(AppTheme.NORDIC_DARK, profile.appTheme)
         assertEquals(AppTheme.NORDIC_DARK, profilePreferences.appThemeFlow.first())
     }
@@ -66,25 +76,6 @@ class ProfilePreferencesTest {
         assertEquals(0.0f, profile.customStrideLengthMeters, 0.001f)
         // 165.0 * 0.413 / 100 = 0.68145
         assertEquals(0.68145f, profile.effectiveStrideLengthMeters, 0.001f)
-        assertEquals(0.68145f, profile.effectiveStrideMeters, 0.001f)
-    }
-
-    @Test
-    fun updateProfile_alias_updatesValuesCorrectly() = runTest {
-        profilePreferences.updateProfile(
-            heightCm = 170.0f,
-            weightKg = 65.0f,
-            isMale = false,
-            customStrideMeters = 0.70f
-        )
-
-        val profile = profilePreferences.userProfileFlow.first()
-        assertEquals(170.0f, profile.heightCm, 0.001f)
-        assertEquals(65.0f, profile.weightKg, 0.001f)
-        assertFalse(profile.isMale)
-        assertEquals(0.70f, profile.customStrideLengthMeters, 0.001f)
-        assertEquals(0.70f, profile.effectiveStrideMeters, 0.001f)
-        assertEquals(0.70f, profile.effectiveStrideLengthMeters, 0.001f)
     }
 
     @Test
@@ -99,78 +90,34 @@ class ProfilePreferencesTest {
         val profile = profilePreferences.userProfileFlow.first()
         assertEquals(0.85f, profile.customStrideLengthMeters, 0.001f)
         assertEquals(0.85f, profile.effectiveStrideLengthMeters, 0.001f)
-        assertEquals(0.85f, profile.effectiveStrideMeters, 0.001f)
     }
 
     @Test
     fun updateDailyGoal_updatesGoalAndDailyGoalFlow() = runTest {
         profilePreferences.updateDailyGoal(10000)
 
-        val profile = profilePreferences.userProfileFlow.first()
-        assertEquals(10000, profile.dailyGoal)
-
-        val goalFromFlow = profilePreferences.dailyGoalFlow.first()
-        assertEquals(10000, goalFromFlow)
+        assertEquals(10000, profilePreferences.userProfileFlow.first().dailyGoal)
+        assertEquals(10000, profilePreferences.dailyGoalFlow.first())
     }
 
     @Test
-    fun setPaused_togglesPauseStateAndFlow() = runTest {
-        assertFalse(profilePreferences.isPausedFlow.first())
-
-        profilePreferences.setPaused(true)
-        assertTrue(profilePreferences.isPausedFlow.first())
-        assertTrue(profilePreferences.userProfileFlow.first().isPaused)
-
-        profilePreferences.setPaused(false)
-        assertFalse(profilePreferences.isPausedFlow.first())
-        assertFalse(profilePreferences.userProfileFlow.first().isPaused)
-    }
-
-    @Test
-    fun updateLastSensorReading_updatesStepsAndDate() = runTest {
-        profilePreferences.updateLastSensorReading(steps = 14250L, date = "2026-11-10")
-
-        val profile = profilePreferences.userProfileFlow.first()
-        assertEquals(14250L, profile.lastSensorStepValue)
-        assertEquals("2026-11-10", profile.lastRecordedDate)
-    }
-
-    @Test
-    fun updateLastSensorStepValue_updatesSensorValue() = runTest {
-        profilePreferences.updateLastSensorStepValue(8888L)
-
-        val profile = profilePreferences.userProfileFlow.first()
-        assertEquals(8888L, profile.lastSensorStepValue)
-    }
-
-    @Test
-    fun updateAppTheme_updatesThemeAndAppThemeFlow() = runTest {
+    fun updateAppTheme_persistsStorageKeyAndSupportsLegacyEnumNames() = runTest {
         assertEquals(AppTheme.NORDIC_DARK, profilePreferences.appThemeFlow.first())
 
         profilePreferences.updateAppTheme(AppTheme.CATPPUCCIN_DARK)
         assertEquals(AppTheme.CATPPUCCIN_DARK, profilePreferences.appThemeFlow.first())
-        assertEquals(AppTheme.CATPPUCCIN_DARK, profilePreferences.userProfileFlow.first().appTheme)
 
-        profilePreferences.updateAppTheme(AppTheme.TOKYONIGHT_LIGHT)
+        // Legacy enum-name compatibility
+        testDataStore.edit { prefs ->
+            prefs[stringPreferencesKey("key_app_theme")] = "TOKYONIGHT_LIGHT"
+        }
         assertEquals(AppTheme.TOKYONIGHT_LIGHT, profilePreferences.appThemeFlow.first())
-        assertEquals(AppTheme.TOKYONIGHT_LIGHT, profilePreferences.userProfileFlow.first().appTheme)
     }
 
     @Test
     fun allEightThemes_areSupported() = runTest {
-        val expectedThemes = listOf(
-            AppTheme.NORDIC_DARK,
-            AppTheme.NORDIC_LIGHT,
-            AppTheme.GRUVBOX_DARK,
-            AppTheme.GRUVBOX_LIGHT,
-            AppTheme.CATPPUCCIN_DARK,
-            AppTheme.CATPPUCCIN_LIGHT,
-            AppTheme.TOKYONIGHT_DARK,
-            AppTheme.TOKYONIGHT_LIGHT
-        )
-
         assertEquals(8, AppTheme.entries.size)
-        for (theme in expectedThemes) {
+        for (theme in AppTheme.entries) {
             profilePreferences.updateAppTheme(theme)
             assertEquals(theme, profilePreferences.appThemeFlow.first())
             assertEquals(theme, profilePreferences.userProfileFlow.first().appTheme)
@@ -178,7 +125,28 @@ class ProfilePreferencesTest {
     }
 
     @Test
+    fun consumeLegacySensorState_readsAndClearsOldV1Keys() = runTest {
+        assertNull(profilePreferences.consumeLegacySensorState())
+
+        testDataStore.edit { prefs ->
+            prefs[longPreferencesKey("key_last_sensor_step_value")] = 14250L
+            prefs[stringPreferencesKey("key_last_recorded_date")] = "2026-11-10"
+            prefs[booleanPreferencesKey("key_is_paused")] = true
+        }
+
+        val migrated = profilePreferences.consumeLegacySensorState()
+        assertNotNull(migrated)
+        assertEquals(14250L, migrated?.lastSensorStepValue)
+        assertEquals("2026-11-10", migrated?.lastRecordedDate)
+        assertTrue(migrated?.isPaused == true)
+
+        // Second call returns null because keys were removed once consumed
+        assertNull(profilePreferences.consumeLegacySensorState())
+    }
+
+    @Test
     fun getInstance_returnsSameInstance() {
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
         val instance1 = ProfilePreferences.getInstance(context)
         val instance2 = ProfilePreferences.getInstance(context)
         assertSame(instance1, instance2)

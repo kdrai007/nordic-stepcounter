@@ -9,8 +9,25 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.pow
 
 class ThemeTest {
+
+    private fun Color.relativeLuminance(): Double {
+        fun linearize(channel: Float): Double {
+            val c = channel.toDouble()
+            return if (c <= 0.03928) c / 12.92 else ((c + 0.055) / 1.055).pow(2.4)
+        }
+        return 0.2126 * linearize(red) + 0.7152 * linearize(green) + 0.0722 * linearize(blue)
+    }
+
+    private fun contrastRatio(fg: Color, bg: Color): Double {
+        val l1 = fg.relativeLuminance()
+        val l2 = bg.relativeLuminance()
+        val lighter = maxOf(l1, l2)
+        val darker = minOf(l1, l2)
+        return (lighter + 0.05) / (darker + 0.05)
+    }
 
     @Test
     fun `all 8 app themes map to distinct palettes correctly`() {
@@ -40,83 +57,51 @@ class ThemeTest {
     }
 
     @Test
-    fun `nordic palette colors match specifications`() {
-        assertEquals(Color(0xFF0A0A0A), NordicDarkPalette.background)
-        assertEquals(Color(0xFF161616), NordicDarkPalette.surface)
-        assertEquals(Color(0xFF262626), NordicDarkPalette.border)
-        assertEquals(Color(0xFFFFFFFF), NordicDarkPalette.primaryText)
-        assertEquals(Color(0xFF8A8A8E), NordicDarkPalette.mutedText)
+    fun `all 8 palettes meet WCAG AA 4_5 to 1 contrast for primaryText, mutedText, and accent`() {
+        for (theme in AppTheme.entries) {
+            val palette = theme.toStepColorPalette()
+            assertTrue(
+                "${theme.name} primaryText on background failed WCAG AA",
+                contrastRatio(palette.primaryText, palette.background) >= 4.5
+            )
+            assertTrue(
+                "${theme.name} primaryText on surface failed WCAG AA",
+                contrastRatio(palette.primaryText, palette.surface) >= 4.5
+            )
+            assertTrue(
+                "${theme.name} mutedText on background failed WCAG AA",
+                contrastRatio(palette.mutedText, palette.background) >= 4.5
+            )
+            assertTrue(
+                "${theme.name} mutedText on surface failed WCAG AA",
+                contrastRatio(palette.mutedText, palette.surface) >= 4.5
+            )
+            assertTrue(
+                "${theme.name} accent on background failed WCAG AA",
+                contrastRatio(palette.accent, palette.background) >= 4.5
+            )
+            assertTrue(
+                "${theme.name} accent on surface failed WCAG AA",
+                contrastRatio(palette.accent, palette.surface) >= 4.5
+            )
+        }
+    }
+
+    @Test
+    fun `palette colors match WCAG updated specifications`() {
         assertEquals(Color(0xFF00E599), NordicDarkPalette.accent)
-        assertEquals(Color(0xFF222222), NordicDarkPalette.trackBackground)
-
-        assertEquals(Color(0xFFF8F9FA), NordicLightPalette.background)
-        assertEquals(Color(0xFFFFFFFF), NordicLightPalette.surface)
-        assertEquals(Color(0xFFE2E8F0), NordicLightPalette.border)
-        assertEquals(Color(0xFF111111), NordicLightPalette.primaryText)
-        assertEquals(Color(0xFF64748B), NordicLightPalette.mutedText)
-        assertEquals(Color(0xFF00B377), NordicLightPalette.accent)
-        assertEquals(Color(0xFFE2E8F0), NordicLightPalette.trackBackground)
+        assertEquals(Color(0xFF007A52), NordicLightPalette.accent)
+        assertEquals(Color(0xFF5D5248), GruvboxLightPalette.mutedText)
+        assertEquals(Color(0xFF5E5A08), GruvboxLightPalette.accent)
+        assertEquals(Color(0xFF236F18), CatppuccinLightPalette.accent)
+        assertEquals(Color(0xFF8C96C0), TokyoNightDarkPalette.mutedText)
+        assertEquals(Color(0xFF27499A), TokyoNightLightPalette.primaryText)
+        assertEquals(Color(0xFF465486), TokyoNightLightPalette.mutedText)
+        assertEquals(Color(0xFF1D56A6), TokyoNightLightPalette.accent)
     }
 
     @Test
-    fun `gruvbox palette colors match specifications`() {
-        assertEquals(Color(0xFF1D2021), GruvboxDarkPalette.background)
-        assertEquals(Color(0xFF282828), GruvboxDarkPalette.surface)
-        assertEquals(Color(0xFF3C3836), GruvboxDarkPalette.border)
-        assertEquals(Color(0xFFEBDBB2), GruvboxDarkPalette.primaryText)
-        assertEquals(Color(0xFFA89984), GruvboxDarkPalette.mutedText)
-        assertEquals(Color(0xFFB8BB26), GruvboxDarkPalette.accent)
-        assertEquals(Color(0xFF3C3836), GruvboxDarkPalette.trackBackground)
-
-        assertEquals(Color(0xFFFBF1C7), GruvboxLightPalette.background)
-        assertEquals(Color(0xFFEBDBB2), GruvboxLightPalette.surface)
-        assertEquals(Color(0xFFD5C4A1), GruvboxLightPalette.border)
-        assertEquals(Color(0xFF3C3836), GruvboxLightPalette.primaryText)
-        assertEquals(Color(0xFF7C6F64), GruvboxLightPalette.mutedText)
-        assertEquals(Color(0xFF79740E), GruvboxLightPalette.accent)
-        assertEquals(Color(0xFFD5C4A1), GruvboxLightPalette.trackBackground)
-    }
-
-    @Test
-    fun `catppuccin palette colors match specifications`() {
-        assertEquals(Color(0xFF1E1E2E), CatppuccinDarkPalette.background)
-        assertEquals(Color(0xFF313244), CatppuccinDarkPalette.surface)
-        assertEquals(Color(0xFF45475A), CatppuccinDarkPalette.border)
-        assertEquals(Color(0xFFCDD6F4), CatppuccinDarkPalette.primaryText)
-        assertEquals(Color(0xFFA6ADC8), CatppuccinDarkPalette.mutedText)
-        assertEquals(Color(0xFFA6E3A1), CatppuccinDarkPalette.accent)
-        assertEquals(Color(0xFF45475A), CatppuccinDarkPalette.trackBackground)
-
-        assertEquals(Color(0xFFEFF1F5), CatppuccinLightPalette.background)
-        assertEquals(Color(0xFFE6E9EF), CatppuccinLightPalette.surface)
-        assertEquals(Color(0xFFCCD0DA), CatppuccinLightPalette.border)
-        assertEquals(Color(0xFF4C4F69), CatppuccinLightPalette.primaryText)
-        assertEquals(Color(0xFF6C6F85), CatppuccinLightPalette.mutedText)
-        assertEquals(Color(0xFF40A02B), CatppuccinLightPalette.accent)
-        assertEquals(Color(0xFFCCD0DA), CatppuccinLightPalette.trackBackground)
-    }
-
-    @Test
-    fun `tokyonight palette colors match specifications`() {
-        assertEquals(Color(0xFF1A1B26), TokyoNightDarkPalette.background)
-        assertEquals(Color(0xFF24283B), TokyoNightDarkPalette.surface)
-        assertEquals(Color(0xFF414868), TokyoNightDarkPalette.border)
-        assertEquals(Color(0xFFC0CAF5), TokyoNightDarkPalette.primaryText)
-        assertEquals(Color(0xFF565F89), TokyoNightDarkPalette.mutedText)
-        assertEquals(Color(0xFF7AA2F7), TokyoNightDarkPalette.accent)
-        assertEquals(Color(0xFF292E42), TokyoNightDarkPalette.trackBackground)
-
-        assertEquals(Color(0xFFE1E2E7), TokyoNightLightPalette.background)
-        assertEquals(Color(0xFFD5D6DB), TokyoNightLightPalette.surface)
-        assertEquals(Color(0xFFB4B5B9), TokyoNightLightPalette.border)
-        assertEquals(Color(0xFF3760BF), TokyoNightLightPalette.primaryText)
-        assertEquals(Color(0xFF6172B0), TokyoNightLightPalette.mutedText)
-        assertEquals(Color(0xFF2E7DE9), TokyoNightLightPalette.accent)
-        assertEquals(Color(0xFFC4C5CA), TokyoNightLightPalette.trackBackground)
-    }
-
-    @Test
-    fun `swiss typography conforms to design specification`() {
+    fun `swiss typography conforms to design specification including bodySmall`() {
         assertEquals(FontFamily.Monospace, SwissTypography.displayLarge.fontFamily)
         assertEquals(FontWeight.Bold, SwissTypography.displayLarge.fontWeight)
         assertEquals(56.sp, SwissTypography.displayLarge.fontSize)
@@ -127,6 +112,10 @@ class ThemeTest {
         assertEquals(18.sp, SwissTypography.titleMedium.fontSize)
         assertEquals(0.5.sp, SwissTypography.titleMedium.letterSpacing)
 
+        assertEquals(FontFamily.SansSerif, SwissTypography.bodySmall.fontFamily)
+        assertEquals(FontWeight.Normal, SwissTypography.bodySmall.fontWeight)
+        assertEquals(12.sp, SwissTypography.bodySmall.fontSize)
+
         assertEquals(FontFamily.Monospace, SwissTypography.labelSmall.fontFamily)
         assertEquals(FontWeight.Medium, SwissTypography.labelSmall.fontWeight)
         assertEquals(11.sp, SwissTypography.labelSmall.fontSize)
@@ -134,8 +123,17 @@ class ThemeTest {
     }
 
     @Test
+    fun `appTheme storageKey and legacy enum name deserialization round-trip`() {
+        for (theme in AppTheme.entries) {
+            assertEquals(theme, AppTheme.fromStorageValue(theme.storageKey))
+            assertEquals(theme, AppTheme.fromStorageValue(theme.name))
+        }
+        assertEquals(AppTheme.NORDIC_DARK, AppTheme.fromStorageValue("unknown_theme"))
+        assertEquals(AppTheme.NORDIC_DARK, AppTheme.fromStorageValue(null))
+    }
+
+    @Test
     fun `localStepPalette provides static composition local`() {
-        // Verify LocalStepPalette provides NordicDarkPalette
         val provided = LocalStepPalette provides NordicDarkPalette
         assertEquals(NordicDarkPalette, provided.value)
     }

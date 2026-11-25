@@ -17,11 +17,29 @@ interface StepDao {
     @Query("SELECT * FROM daily_steps ORDER BY date DESC LIMIT :limit")
     fun getRecentDailyRecords(limit: Int): Flow<List<DailyStepEntity>>
 
+    @Query("SELECT * FROM daily_steps WHERE date BETWEEN :startDate AND :endDate ORDER BY date DESC")
+    fun getDailyRecordsInRange(startDate: String, endDate: String): Flow<List<DailyStepEntity>>
+
+    @Query("SELECT MAX(steps) FROM daily_steps WHERE date <= :maxDate")
+    fun getBestDaySteps(maxDate: String): Flow<Int?>
+
+    @Query("SELECT MIN(date) FROM daily_steps WHERE date <= :maxDate")
+    fun getEarliestRecordDate(maxDate: String): Flow<String?>
+
     @Query("SELECT * FROM hourly_steps WHERE date = :date ORDER BY hour ASC")
     fun getHourlyRecordsForDate(date: String): Flow<List<HourlyStepEntity>>
 
     @Query("SELECT * FROM hourly_steps WHERE date = :date AND hour = :hour LIMIT 1")
     suspend fun getHourlyRecordDirect(date: String, hour: Int): HourlyStepEntity?
+
+    @Query("SELECT * FROM sensor_state WHERE id = ${SensorStateEntity.SINGLETON_ID} LIMIT 1")
+    fun getSensorStateFlow(): Flow<SensorStateEntity?>
+
+    @Query("SELECT * FROM sensor_state WHERE id = ${SensorStateEntity.SINGLETON_ID} LIMIT 1")
+    suspend fun getSensorStateDirect(): SensorStateEntity?
+
+    @Upsert
+    suspend fun upsertSensorState(entity: SensorStateEntity)
 
     @Upsert
     suspend fun upsertDaily(entity: DailyStepEntity)
@@ -31,6 +49,19 @@ interface StepDao {
 
     @Transaction
     suspend fun upsertDailyAndHourly(daily: DailyStepEntity, hourly: HourlyStepEntity?) {
+        upsertDaily(daily)
+        if (hourly != null) {
+            upsertHourly(hourly)
+        }
+    }
+
+    @Transaction
+    suspend fun persistSensorUpdate(
+        sensorState: SensorStateEntity,
+        daily: DailyStepEntity,
+        hourly: HourlyStepEntity?
+    ) {
+        upsertSensorState(sensorState)
         upsertDaily(daily)
         if (hourly != null) {
             upsertHourly(hourly)

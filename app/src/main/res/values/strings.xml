@@ -1,3 +1,81 @@
 <resources>
     <string name="app_name">Nordic Step Counter</string>
+    <string name="app_header_title">NORDIC STEP COUNTER</string>
+
+    <!-- Navigation -->
+    <string name="nav_today_label">TODAY</string>
+    <string name="nav_today_cd">Today</string>
+    <string name="nav_history_label">HISTORY</string>
+    <string name="nav_history_cd">History</string>
+    <string name="nav_profile_label">PROFILE</string>
+    <string name="nav_profile_cd">Profile</string>
+
+    <!-- Today screen -->
+    <string name="metric_unit_km">KM</string>
+    <string name="metric_unit_kcal">KCAL</string>
+    <string name="metric_unit_mins">MINS</string>
+    <string name="gauge_paused">PAUSED</string>
+    <string name="gauge_steps_goal">STEPS / %1$s</string>
+    <string name="gauge_cd_paused">%1$s of %2$s steps, %3$d percent of goal, tracking paused</string>
+    <string name="gauge_cd_active">%1$s of %2$s steps, %3$d percent of goal, tracking active</string>
+    <string name="action_pause_tracking">PAUSE TRACKING</string>
+    <string name="action_resume_tracking">RESUME TRACKING</string>
+    <string name="banner_no_sensor">No hardware step counter sensor detected on this device</string>
+    <string name="banner_activity_permission">Activity permission required to count steps</string>
+    <string name="banner_notification_permission">Notification permission disabled; live step counter notification is hidden</string>
+    <string name="banner_downtime_gap">Tracking resumed after a multi-day gap (%1$s to %2$s). Offline steps were skipped so today\'s total stays accurate.</string>
+    <string name="action_grant">GRANT</string>
+    <string name="action_dismiss">OK</string>
+
+    <!-- History screen -->
+    <string name="history_header">ANALYTICS &amp; HISTORY</string>
+    <string name="history_tab_24h">24 HOURS</string>
+    <string name="history_tab_7d">7 DAYS</string>
+    <string name="history_tab_30d">30 DAYS</string>
+    <string name="history_daily_avg">DAILY AVG</string>
+    <string name="history_hourly_avg">HOURLY AVG</string>
+    <string name="history_personal_best">PERSONAL BEST</string>
+    <string name="chart_hint_tap">TAP BAR TO INSPECT</string>
+    <string name="chart_goal_label">GOAL %1$s</string>
+    <string name="chart_selected_readout">%1$s • %2$s STEPS</string>
+    <string name="chart_cd_summary">%1$s step chart, peak %2$s steps</string>
+    <string name="chart_cd_selected">%1$s step chart, selected %2$s with %3$s steps</string>
+
+    <!-- Profile screen -->
+    <string name="profile_header">PROFILE &amp; CALIBRATION</string>
+    <string name="profile_daily_goal">DAILY STEP GOAL</string>
+    <string name="profile_custom_goal">CUSTOM</string>
+    <string name="profile_custom_goal_active">CUSTOM (%1$s)</string>
+    <string name="profile_custom_goal_dialog_title">CUSTOM DAILY GOAL</string>
+    <string name="profile_custom_goal_hint">Steps per day (1,000 – 100,000)</string>
+    <string name="profile_custom_goal_error">Enter a goal between 1,000 and 100,000</string>
+    <string name="profile_biometrics_stride">BIOMETRICS &amp; STRIDE</string>
+    <string name="profile_calibrate">CALIBRATE</string>
+    <string name="profile_biometrics_summary">Height: %1$d cm • Weight: %2$d kg</string>
+    <string name="profile_stride_summary">Sex: %1$s • Stride: %2$.2f m (%3$s)</string>
+    <string name="profile_stride_custom">Custom</string>
+    <string name="profile_stride_estimated">Estimated</string>
+    <string name="profile_color_theme">COLOR THEME (8 PALETTES)</string>
+    <string name="profile_theme_dark">DARK</string>
+    <string name="profile_theme_light">LIGHT</string>
+    <string name="dialog_calibrate_title">CALIBRATE BIOMETRICS</string>
+    <string name="dialog_sex_label">SEX</string>
+    <string name="sex_male">Male</string>
+    <string name="sex_female">Female</string>
+    <string name="dialog_height_label">HEIGHT: %1$d CM</string>
+    <string name="dialog_weight_label">WEIGHT: %1$d KG</string>
+    <string name="dialog_custom_stride_label">CUSTOM STRIDE: %1$.2f M</string>
+    <string name="dialog_estimated_stride_label">ESTIMATED STRIDE: %1$.2f M</string>
+    <string name="stride_auto">Auto</string>
+    <string name="action_save">SAVE</string>
+    <string name="action_cancel">CANCEL</string>
+
+    <!-- Service & Notification -->
+    <string name="notification_channel_name">Step Tracking Service</string>
+    <string name="notification_channel_description">Shows live daily step count and goal progress</string>
+    <string name="notification_title_steps">%1$s STEPS</string>
+    <string name="notification_status_paused">Paused • %1$d%% of goal</string>
+    <string name="notification_status_active">%1$d%% of %2$s goal</string>
+    <string name="notification_action_resume">Resume</string>
+    <string name="notification_action_pause">Pause</string>
 </resources>

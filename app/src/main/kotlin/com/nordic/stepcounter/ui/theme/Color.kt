@@ -32,7 +32,7 @@ val NordicLightPalette = StepColorPalette(
     border = Color(0xFFE2E8F0),
     primaryText = Color(0xFF111111),
     mutedText = Color(0xFF64748B),
-    accent = Color(0xFF00B377),
+    accent = Color(0xFF007A52),
     trackBackground = Color(0xFFE2E8F0)
 )
 
@@ -51,8 +51,8 @@ val GruvboxLightPalette = StepColorPalette(
     surface = Color(0xFFEBDBB2),
     border = Color(0xFFD5C4A1),
     primaryText = Color(0xFF3C3836),
-    mutedText = Color(0xFF7C6F64),
-    accent = Color(0xFF79740E),
+    mutedText = Color(0xFF5D5248),
+    accent = Color(0xFF5E5A08),
     trackBackground = Color(0xFFD5C4A1)
 )
 
@@ -71,8 +71,8 @@ val CatppuccinLightPalette = StepColorPalette(
     surface = Color(0xFFE6E9EF),
     border = Color(0xFFCCD0DA),
     primaryText = Color(0xFF4C4F69),
-    mutedText = Color(0xFF6C6F85),
-    accent = Color(0xFF40A02B),
+    mutedText = Color(0xFF5C5F77),
+    accent = Color(0xFF236F18),
     trackBackground = Color(0xFFCCD0DA)
 )
 
@@ -81,7 +81,7 @@ val TokyoNightDarkPalette = StepColorPalette(
     surface = Color(0xFF24283B),
     border = Color(0xFF414868),
     primaryText = Color(0xFFC0CAF5),
-    mutedText = Color(0xFF565F89),
+    mutedText = Color(0xFF8C96C0),
     accent = Color(0xFF7AA2F7),
     trackBackground = Color(0xFF292E42)
 )
@@ -90,9 +90,9 @@ val TokyoNightLightPalette = StepColorPalette(
     background = Color(0xFFE1E2E7),
     surface = Color(0xFFD5D6DB),
     border = Color(0xFFB4B5B9),
-    primaryText = Color(0xFF3760BF),
-    mutedText = Color(0xFF6172B0),
-    accent = Color(0xFF2E7DE9),
+    primaryText = Color(0xFF27499A),
+    mutedText = Color(0xFF465486),
+    accent = Color(0xFF1D56A6),
     trackBackground = Color(0xFFC4C5CA)
 )
 

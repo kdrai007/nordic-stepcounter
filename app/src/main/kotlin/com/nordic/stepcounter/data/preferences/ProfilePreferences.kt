@@ -15,18 +15,28 @@ import com.nordic.stepcounter.domain.StepCalculationEngine
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.io.IOException
 
-enum class AppTheme {
-    NORDIC_DARK,
-    NORDIC_LIGHT,
-    GRUVBOX_DARK,
-    GRUVBOX_LIGHT,
-    CATPPUCCIN_DARK,
-    CATPPUCCIN_LIGHT,
-    TOKYONIGHT_DARK,
-    TOKYONIGHT_LIGHT
+enum class AppTheme(val storageKey: String) {
+    NORDIC_DARK("nordic_dark"),
+    NORDIC_LIGHT("nordic_light"),
+    GRUVBOX_DARK("gruvbox_dark"),
+    GRUVBOX_LIGHT("gruvbox_light"),
+    CATPPUCCIN_DARK("catppuccin_dark"),
+    CATPPUCCIN_LIGHT("catppuccin_light"),
+    TOKYONIGHT_DARK("tokyonight_dark"),
+    TOKYONIGHT_LIGHT("tokyonight_light");
+
+    companion object {
+        fun fromStorageValue(raw: String?): AppTheme {
+            if (raw.isNullOrBlank()) return NORDIC_DARK
+            return entries.firstOrNull { it.storageKey == raw }
+                ?: entries.firstOrNull { it.name == raw }
+                ?: NORDIC_DARK
+        }
+    }
 }
 
 data class UserProfile(
@@ -35,9 +45,6 @@ data class UserProfile(
     val isMale: Boolean = true,
     val customStrideLengthMeters: Float = 0.0f,
     val dailyGoal: Int = 6000,
-    val isPaused: Boolean = false,
-    val lastSensorStepValue: Long = -1L,
-    val lastRecordedDate: String = "",
     val appTheme: AppTheme = AppTheme.NORDIC_DARK
 ) {
     val effectiveStrideLengthMeters: Float
@@ -46,10 +53,13 @@ data class UserProfile(
         } else {
             StepCalculationEngine.calculateDefaultStrideLengthMeters(heightCm, isMale)
         }
-
-    val effectiveStrideMeters: Float
-        get() = effectiveStrideLengthMeters
 }
+
+data class LegacySensorState(
+    val lastSensorStepValue: Long,
+    val lastRecordedDate: String,
+    val isPaused: Boolean
+)
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "nordic_user_preferences")
 
@@ -67,10 +77,12 @@ class ProfilePreferences(
         val KEY_IS_MALE = booleanPreferencesKey("key_is_male")
         val KEY_CUSTOM_STRIDE_METERS = floatPreferencesKey("key_custom_stride_meters")
         val KEY_DAILY_GOAL = intPreferencesKey("key_daily_goal")
+        val KEY_APP_THEME = stringPreferencesKey("key_app_theme")
+
+        // Legacy v1 keys migrated once into Room SensorStateEntity
         val KEY_IS_PAUSED = booleanPreferencesKey("key_is_paused")
         val KEY_LAST_SENSOR_STEP_VALUE = longPreferencesKey("key_last_sensor_step_value")
         val KEY_LAST_RECORDED_DATE = stringPreferencesKey("key_last_recorded_date")
-        val KEY_APP_THEME = stringPreferencesKey("key_app_theme")
     }
 
     val userProfileFlow: Flow<UserProfile> = dataStore.data
@@ -82,33 +94,18 @@ class ProfilePreferences(
             }
         }
         .map { preferences ->
-            val themeName = preferences[PreferencesKeys.KEY_APP_THEME]
-            val appTheme = themeName?.let {
-                runCatching { AppTheme.valueOf(it) }.getOrNull()
-            } ?: AppTheme.NORDIC_DARK
-
             UserProfile(
                 heightCm = preferences[PreferencesKeys.KEY_HEIGHT_CM] ?: 175.0f,
                 weightKg = preferences[PreferencesKeys.KEY_WEIGHT_KG] ?: 70.0f,
                 isMale = preferences[PreferencesKeys.KEY_IS_MALE] ?: true,
                 customStrideLengthMeters = preferences[PreferencesKeys.KEY_CUSTOM_STRIDE_METERS] ?: 0.0f,
                 dailyGoal = preferences[PreferencesKeys.KEY_DAILY_GOAL] ?: 6000,
-                isPaused = preferences[PreferencesKeys.KEY_IS_PAUSED] ?: false,
-                lastSensorStepValue = preferences[PreferencesKeys.KEY_LAST_SENSOR_STEP_VALUE] ?: -1L,
-                lastRecordedDate = preferences[PreferencesKeys.KEY_LAST_RECORDED_DATE] ?: "",
-                appTheme = appTheme
+                appTheme = AppTheme.fromStorageValue(preferences[PreferencesKeys.KEY_APP_THEME])
             )
         }
 
-    val isPausedFlow: Flow<Boolean> = userProfileFlow.map { it.isPaused }.distinctUntilChanged()
     val dailyGoalFlow: Flow<Int> = userProfileFlow.map { it.dailyGoal }.distinctUntilChanged()
     val appThemeFlow: Flow<AppTheme> = userProfileFlow.map { it.appTheme }.distinctUntilChanged()
-
-    suspend fun setPaused(isPaused: Boolean) {
-        dataStore.edit { preferences ->
-            preferences[PreferencesKeys.KEY_IS_PAUSED] = isPaused
-        }
-    }
 
     suspend fun updateDailyGoal(goal: Int) {
         dataStore.edit { preferences ->
@@ -130,37 +127,38 @@ class ProfilePreferences(
         }
     }
 
-    suspend fun updateProfile(
-        heightCm: Float,
-        weightKg: Float,
-        isMale: Boolean,
-        customStrideMeters: Float = 0.0f
-    ) {
-        updatePhysicalProfile(
-            heightCm = heightCm,
-            weightKg = weightKg,
-            isMale = isMale,
-            customStrideLengthMeters = customStrideMeters
-        )
-    }
-
-    suspend fun updateLastSensorReading(steps: Long, date: String) {
-        dataStore.edit { preferences ->
-            preferences[PreferencesKeys.KEY_LAST_SENSOR_STEP_VALUE] = steps
-            preferences[PreferencesKeys.KEY_LAST_RECORDED_DATE] = date
-        }
-    }
-
-    suspend fun updateLastSensorStepValue(stepValue: Long) {
-        dataStore.edit { preferences ->
-            preferences[PreferencesKeys.KEY_LAST_SENSOR_STEP_VALUE] = stepValue
-        }
-    }
-
     suspend fun updateAppTheme(theme: AppTheme) {
         dataStore.edit { preferences ->
-            preferences[PreferencesKeys.KEY_APP_THEME] = theme.name
+            preferences[PreferencesKeys.KEY_APP_THEME] = theme.storageKey
         }
+    }
+
+    /**
+     * Reads and clears legacy v1 sensor-tracking keys from DataStore if present.
+     * Used for one-time migration into Room's [com.nordic.stepcounter.data.local.SensorStateEntity].
+     */
+    suspend fun consumeLegacySensorState(): LegacySensorState? {
+        val current = dataStore.data
+            .catch { exception ->
+                if (exception is IOException) emit(emptyPreferences()) else throw exception
+            }
+            .first()
+        val hasAnyLegacyKey = current.contains(PreferencesKeys.KEY_LAST_SENSOR_STEP_VALUE) ||
+            current.contains(PreferencesKeys.KEY_LAST_RECORDED_DATE) ||
+            current.contains(PreferencesKeys.KEY_IS_PAUSED)
+        if (!hasAnyLegacyKey) return null
+
+        val legacy = LegacySensorState(
+            lastSensorStepValue = current[PreferencesKeys.KEY_LAST_SENSOR_STEP_VALUE] ?: -1L,
+            lastRecordedDate = current[PreferencesKeys.KEY_LAST_RECORDED_DATE] ?: "",
+            isPaused = current[PreferencesKeys.KEY_IS_PAUSED] ?: false
+        )
+        dataStore.edit { preferences ->
+            preferences.remove(PreferencesKeys.KEY_LAST_SENSOR_STEP_VALUE)
+            preferences.remove(PreferencesKeys.KEY_LAST_RECORDED_DATE)
+            preferences.remove(PreferencesKeys.KEY_IS_PAUSED)
+        }
+        return legacy
     }
 
     suspend fun clear() {

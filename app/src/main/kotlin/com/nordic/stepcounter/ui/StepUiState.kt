@@ -7,6 +7,7 @@ import com.nordic.stepcounter.data.preferences.UserProfile
 import java.time.LocalDate
 
 data class StepUiState(
+    val isLoaded: Boolean = false,
     val todaySteps: Int = 0,
     val dailyGoal: Int = 6000,
     val goalProgress: Float = 0f,
@@ -18,15 +19,14 @@ data class StepUiState(
     val weightKg: Float = 70f,
     val isMale: Boolean = true,
     val customStrideMeters: Float = 0f,
-    val effectiveStrideMeters: Float = 0.72f,
+    val effectiveStrideLengthMeters: Float = UserProfile().effectiveStrideLengthMeters,
     val appTheme: AppTheme = AppTheme.NORDIC_DARK,
     val recentRecords: List<DailyStepEntity> = emptyList(),
-    val weeklyRecords: List<DailyStepEntity> = emptyList(),
-    val monthlyRecords: List<DailyStepEntity> = emptyList(),
     val hourlyToday: List<HourlyStepEntity> = emptyList(),
+    val personalBestSteps: Int = 0,
+    val earliestRecordDate: String = "",
+    val downtimeGapFromDate: String = "",
+    val downtimeGapToDate: String = "",
     val userProfile: UserProfile = UserProfile(),
-    val isTrackingActive: Boolean = true,
     val currentDate: String = LocalDate.now().toString()
-) {
-    val currentTheme: AppTheme get() = appTheme
-}
+)
