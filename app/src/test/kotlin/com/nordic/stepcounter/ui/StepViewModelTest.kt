@@ -46,6 +46,7 @@ class StepViewModelTest {
         every { repository.getHourlyRecordsFlow(any()) } returns flowOf(emptyList())
         every { repository.getBestDayStepsFlow(any()) } returns flowOf(null)
         every { repository.getEarliestRecordDateFlow(any()) } returns flowOf(null)
+        every { repository.lastBackupTimestampFlow } returns flowOf(0L)
     }
 
     @After

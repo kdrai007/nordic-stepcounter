@@ -13,6 +13,12 @@ import com.nordic.stepcounter.data.preferences.ProfilePreferences
 import com.nordic.stepcounter.data.preferences.UserProfile
 import com.nordic.stepcounter.domain.StepCalculationEngine
 import com.nordic.stepcounter.domain.StepDeltaProcessor
+import com.nordic.stepcounter.domain.backup.BackupDailyStep
+import com.nordic.stepcounter.domain.backup.BackupHourlyStep
+import com.nordic.stepcounter.domain.backup.BackupProfile
+import com.nordic.stepcounter.domain.backup.BackupSnapshot
+import com.nordic.stepcounter.domain.backup.RestoreStats
+import com.nordic.stepcounter.domain.backup.StepBackupMerger
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -44,6 +50,7 @@ class StepRepository(
         .distinctUntilChanged()
     val dailyGoalFlow: Flow<Int> = preferences.dailyGoalFlow
     val appThemeFlow: Flow<AppTheme> = preferences.appThemeFlow
+    val lastBackupTimestampFlow: Flow<Long> = preferences.lastBackupTimestampFlow
 
     fun getDailyRecordFlow(date: String): Flow<DailyStepEntity?> =
         stepDao.getDailyRecord(date)
@@ -306,6 +313,67 @@ class StepRepository(
 
     suspend fun updateAppTheme(theme: AppTheme) {
         preferences.updateAppTheme(theme)
+    }
+
+    /**
+     * Captures a point-in-time snapshot of user profile and daily/hourly step history.
+     * Holds [sensorMutex] strictly for the Room + DataStore read; serialization and encryption
+     * happen outside the lock.
+     */
+    suspend fun captureBackupSnapshot(appVersionName: String): BackupSnapshot = sensorMutex.withLock {
+        val profile = preferences.userProfileFlow.first()
+        val daily = stepDao.getAllDailyRecordsDirect()
+        val hourly = stepDao.getAllHourlyRecordsDirect()
+        BackupSnapshot(
+            exportedAtEpochMs = currentTimeMillisProvider(),
+            appVersionName = appVersionName,
+            profile = BackupProfile.fromUserProfile(profile),
+            dailySteps = daily.map(BackupDailyStep::fromEntity),
+            hourlySteps = hourly.map(BackupHourlyStep::fromEntity)
+        )
+    }
+
+    suspend fun markManualBackupCompleted(timestampMs: Long = currentTimeMillisProvider()) {
+        preferences.updateLastBackupTimestamp(timestampMs)
+    }
+
+    /**
+     * Merges a parsed [BackupSnapshot] into local Room storage without disturbing hardware
+     * [SensorStateEntity] baselines. Holds [sensorMutex] strictly for the database read/merge/write.
+     */
+    suspend fun restoreBackupSnapshot(
+        snapshot: BackupSnapshot,
+        restoreProfile: Boolean
+    ): RestoreStats = sensorMutex.withLock {
+        val currentProfile = preferences.userProfileFlow.first()
+        val effectiveProfile = if (restoreProfile) {
+            snapshot.profile.toUserProfile()
+        } else {
+            currentProfile
+        }
+        val localDaily = stepDao.getAllDailyRecordsDirect()
+        val localHourly = stepDao.getAllHourlyRecordsDirect()
+
+        val merged = StepBackupMerger.merge(
+            localDaily = localDaily,
+            localHourly = localHourly,
+            snapshot = snapshot,
+            effectiveProfile = effectiveProfile
+        )
+
+        stepDao.applyMergedBackup(merged.dailyUpserts, merged.hourlyUpserts)
+        if (restoreProfile) {
+            preferences.restoreProfile(effectiveProfile)
+            val today = LocalDate.now(zoneIdProvider()).toString()
+            stepDao.updateDailyGoal(today, effectiveProfile.dailyGoal)
+        }
+
+        RestoreStats(
+            mergedDaysCount = merged.mergedDaysCount,
+            updatedDaysCount = merged.updatedDaysCount,
+            updatedHourlyCount = merged.updatedHourlyCount,
+            profileRestored = restoreProfile
+        )
     }
 
     private suspend fun getOrMigrateSensorStateLocked(): SensorStateEntity {

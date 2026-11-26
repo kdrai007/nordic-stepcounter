@@ -28,5 +28,6 @@ data class StepUiState(
     val downtimeGapFromDate: String = "",
     val downtimeGapToDate: String = "",
     val userProfile: UserProfile = UserProfile(),
-    val currentDate: String = LocalDate.now().toString()
+    val currentDate: String = LocalDate.now().toString(),
+    val lastBackupTimestampMs: Long = 0L
 )

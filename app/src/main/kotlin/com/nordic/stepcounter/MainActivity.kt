@@ -94,8 +94,27 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val state by viewModel.uiState.collectAsStateWithLifecycle()
+            val backupState by viewModel.backupState.collectAsStateWithLifecycle()
             if (state.isLoaded) {
                 isUiStateLoaded = true
+            }
+
+            var pendingExportPassphrase by remember { mutableStateOf<String?>(null) }
+            val exportBackupLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.CreateDocument("application/json")
+            ) { uri ->
+                val passphrase = pendingExportPassphrase
+                pendingExportPassphrase = null
+                if (uri != null) {
+                    viewModel.exportBackupToUri(uri, passphrase)
+                }
+            }
+            val restoreBackupLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.OpenDocument()
+            ) { uri ->
+                if (uri != null) {
+                    viewModel.inspectBackupUri(uri)
+                }
             }
 
             var currentTab by rememberSaveable { mutableIntStateOf(0) }
@@ -298,6 +317,19 @@ class MainActivity : ComponentActivity() {
                             onSelectGoal = viewModel::updateDailyGoal,
                             onSelectTheme = viewModel::updateAppTheme,
                             onUpdatePhysicalProfile = viewModel::updatePhysicalProfile,
+                            backupState = backupState,
+                            onRequestExportBackup = { passphrase ->
+                                pendingExportPassphrase = passphrase
+                                exportBackupLauncher.launch("nordic-steps-${state.currentDate}.json")
+                            },
+                            onRequestRestoreBackup = {
+                                restoreBackupLauncher.launch(
+                                    arrayOf("application/json", "application/octet-stream", "*/*")
+                                )
+                            },
+                            onUnlockEncryptedBackup = viewModel::unlockEncryptedBackup,
+                            onConfirmRestoreBackup = viewModel::confirmRestore,
+                            onDismissBackupState = viewModel::dismissBackupState,
                             modifier = Modifier.padding(innerPadding)
                         )
                     }

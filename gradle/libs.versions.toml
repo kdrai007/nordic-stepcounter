@@ -16,6 +16,7 @@ ksp = "2.3.13"
 room = "2.7.0"
 datastore = "1.1.2"
 mockk = "1.13.13"
+orgJson = "20240303"
 robolectric = "4.14.1"
 
 [libraries]
@@ -47,6 +48,7 @@ kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutine
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 junit = { module = "junit:junit", version.ref = "junit" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
+org-json = { module = "org.json:json", version.ref = "orgJson" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 
 [plugins]

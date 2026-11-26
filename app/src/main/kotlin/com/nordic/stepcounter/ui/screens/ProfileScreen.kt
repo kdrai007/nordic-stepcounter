@@ -22,6 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -33,21 +34,32 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.nordic.stepcounter.R
 import com.nordic.stepcounter.data.preferences.AppTheme
 import com.nordic.stepcounter.domain.StepCalculationEngine
+import com.nordic.stepcounter.domain.backup.BackupSnapshot
+import com.nordic.stepcounter.ui.BackupErrorReason
+import com.nordic.stepcounter.ui.BackupSuccessType
+import com.nordic.stepcounter.ui.BackupUiState
 import com.nordic.stepcounter.ui.StepUiState
 import com.nordic.stepcounter.ui.theme.LocalStepPalette
 import com.nordic.stepcounter.ui.theme.displayName
 import com.nordic.stepcounter.ui.theme.isDark
 import com.nordic.stepcounter.ui.theme.toStepColorPalette
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -60,12 +72,19 @@ fun ProfileScreen(
     onSelectGoal: (Int) -> Unit,
     onSelectTheme: (AppTheme) -> Unit,
     onUpdatePhysicalProfile: (heightCm: Float, weightKg: Float, isMale: Boolean, customStrideMeters: Float) -> Unit = { _, _, _, _ -> },
+    backupState: BackupUiState = BackupUiState.Idle,
+    onRequestExportBackup: (passphrase: String?) -> Unit = {},
+    onRequestRestoreBackup: () -> Unit = {},
+    onUnlockEncryptedBackup: (pendingBytes: ByteArray, passphrase: String) -> Unit = { _, _ -> },
+    onConfirmRestoreBackup: (snapshot: BackupSnapshot, restoreProfile: Boolean) -> Unit = { _, _ -> },
+    onDismissBackupState: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val palette = LocalStepPalette.current
     val locale = Locale.getDefault()
     var showCalibrationDialog by rememberSaveable { mutableStateOf(false) }
     var showCustomGoalDialog by rememberSaveable { mutableStateOf(false) }
+    var showExportPassphraseDialog by rememberSaveable { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -172,6 +191,151 @@ fun ProfileScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = palette.mutedText
                 )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(28.dp))
+        Text(
+            text = stringResource(R.string.profile_cloud_backup),
+            style = MaterialTheme.typography.labelSmall,
+            color = palette.primaryText
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        val isBackupWorking = backupState is BackupUiState.InProgress
+        val lastBackupFormatted = remember(state.lastBackupTimestampMs, locale) {
+            if (state.lastBackupTimestampMs > 0L) {
+                DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
+                    .withLocale(locale)
+                    .withZone(ZoneId.systemDefault())
+                    .format(Instant.ofEpochMilli(state.lastBackupTimestampMs))
+            } else {
+                null
+            }
+        }
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(10.dp),
+            color = palette.surface,
+            border = BorderStroke(1.dp, palette.border)
+        ) {
+            Column(
+                modifier = Modifier.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.backup_auto_status),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = palette.primaryText
+                )
+                Text(
+                    text = if (lastBackupFormatted != null) {
+                        stringResource(R.string.backup_last_manual_date, lastBackupFormatted)
+                    } else {
+                        stringResource(R.string.backup_last_manual_never)
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = palette.mutedText
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Button(
+                        enabled = !isBackupWorking,
+                        onClick = { showExportPassphraseDialog = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = palette.accent),
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.backup_export_button),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = palette.background,
+                            maxLines = 1
+                        )
+                    }
+                    OutlinedButton(
+                        enabled = !isBackupWorking,
+                        onClick = onRequestRestoreBackup,
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.backup_restore_button),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = palette.primaryText,
+                            maxLines = 1
+                        )
+                    }
+                }
+                when (backupState) {
+                    is BackupUiState.InProgress -> {
+                        Text(
+                            text = stringResource(
+                                if (backupState.isExport) {
+                                    R.string.backup_working_export
+                                } else {
+                                    R.string.backup_working_restore
+                                }
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = palette.accent
+                        )
+                    }
+                    is BackupUiState.Success -> {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = when (backupState.type) {
+                                    BackupSuccessType.EXPORT -> stringResource(
+                                        R.string.backup_success_export,
+                                        backupState.dayCount
+                                    )
+                                    BackupSuccessType.RESTORE -> stringResource(
+                                        R.string.backup_success_restore,
+                                        backupState.dayCount,
+                                        backupState.updatedDays
+                                    )
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = palette.accent,
+                                modifier = Modifier.weight(1f)
+                            )
+                            TextButton(onClick = onDismissBackupState) {
+                                Text(stringResource(R.string.action_dismiss), color = palette.mutedText)
+                            }
+                        }
+                    }
+                    is BackupUiState.Error -> {
+                        val errorText = when (backupState.reason) {
+                            BackupErrorReason.READ_FAILED -> stringResource(R.string.backup_error_read_failed)
+                            BackupErrorReason.WRITE_FAILED -> stringResource(R.string.backup_error_write_failed)
+                            BackupErrorReason.FILE_TOO_LARGE -> stringResource(R.string.backup_error_too_large)
+                            BackupErrorReason.INVALID_FORMAT -> stringResource(R.string.backup_error_invalid_format)
+                            BackupErrorReason.UNSUPPORTED_VERSION -> stringResource(R.string.backup_error_unsupported_version)
+                            BackupErrorReason.UNKNOWN -> stringResource(R.string.backup_error_unknown)
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = errorText,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = palette.accent,
+                                modifier = Modifier.weight(1f)
+                            )
+                            TextButton(onClick = onDismissBackupState) {
+                                Text(stringResource(R.string.action_dismiss), color = palette.mutedText)
+                            }
+                        }
+                    }
+                    else -> Unit
+                }
             }
         }
 
@@ -508,6 +672,249 @@ fun ProfileScreen(
             }
         )
     }
+
+    if (showExportPassphraseDialog) {
+        var passphrase by remember { mutableStateOf("") }
+        var confirmPassphrase by remember { mutableStateOf("") }
+        var showPassword by remember { mutableStateOf(false) }
+        val needsConfirm = passphrase.isNotEmpty()
+        val isMismatch = needsConfirm && confirmPassphrase != passphrase
+        val canProceed = !needsConfirm || confirmPassphrase == passphrase
+
+        AlertDialog(
+            onDismissRequest = { showExportPassphraseDialog = false },
+            containerColor = palette.surface,
+            title = {
+                Text(
+                    text = stringResource(R.string.backup_export_dialog_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = palette.primaryText
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = stringResource(R.string.backup_export_dialog_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = palette.mutedText
+                    )
+                    PassphraseTextField(
+                        value = passphrase,
+                        onValueChange = { passphrase = it },
+                        label = stringResource(R.string.backup_passphrase_label),
+                        showPassword = showPassword,
+                        onToggleShowPassword = { showPassword = !showPassword }
+                    )
+                    if (needsConfirm) {
+                        OutlinedTextField(
+                            value = confirmPassphrase,
+                            onValueChange = { confirmPassphrase = it },
+                            singleLine = true,
+                            isError = isMismatch,
+                            label = { Text(stringResource(R.string.backup_passphrase_confirm_label)) },
+                            visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        if (isMismatch) {
+                            Text(
+                                text = stringResource(R.string.backup_passphrase_mismatch),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = palette.accent
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    enabled = canProceed,
+                    onClick = {
+                        val chosen = passphrase.ifEmpty { null }
+                        showExportPassphraseDialog = false
+                        onRequestExportBackup(chosen)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = palette.accent)
+                ) {
+                    Text(stringResource(R.string.backup_export_continue), color = palette.background)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExportPassphraseDialog = false }) {
+                    Text(stringResource(R.string.action_cancel), color = palette.mutedText)
+                }
+            }
+        )
+    }
+
+    if (backupState is BackupUiState.PassphraseRequired) {
+        var unlockPassphrase by remember(backupState.pendingBytes) { mutableStateOf("") }
+        var showPassword by remember { mutableStateOf(false) }
+
+        AlertDialog(
+            onDismissRequest = onDismissBackupState,
+            containerColor = palette.surface,
+            title = {
+                Text(
+                    text = stringResource(R.string.backup_unlock_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = palette.primaryText
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = stringResource(R.string.backup_unlock_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = palette.mutedText
+                    )
+                    PassphraseTextField(
+                        value = unlockPassphrase,
+                        onValueChange = { unlockPassphrase = it },
+                        label = stringResource(R.string.backup_unlock_label),
+                        showPassword = showPassword,
+                        onToggleShowPassword = { showPassword = !showPassword },
+                        isError = backupState.isRetry
+                    )
+                    if (backupState.isRetry) {
+                        Text(
+                            text = stringResource(R.string.backup_unlock_wrong),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = palette.accent
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    enabled = unlockPassphrase.isNotEmpty(),
+                    onClick = { onUnlockEncryptedBackup(backupState.pendingBytes, unlockPassphrase) },
+                    colors = ButtonDefaults.buttonColors(containerColor = palette.accent)
+                ) {
+                    Text(stringResource(R.string.backup_unlock_action), color = palette.background)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismissBackupState) {
+                    Text(stringResource(R.string.action_cancel), color = palette.mutedText)
+                }
+            }
+        )
+    }
+
+    if (backupState is BackupUiState.RestorePreview) {
+        var restoreProfile by remember(backupState.snapshot) { mutableStateOf(true) }
+        val summary = backupState.summary
+
+        AlertDialog(
+            onDismissRequest = onDismissBackupState,
+            containerColor = palette.surface,
+            title = {
+                Text(
+                    text = stringResource(R.string.backup_preview_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = palette.primaryText
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (summary.dayCount > 0) {
+                        Text(
+                            text = stringResource(
+                                R.string.backup_preview_summary,
+                                summary.dayCount,
+                                String.format(locale, "%,d", summary.totalSteps)
+                            ),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = palette.primaryText
+                        )
+                        if (summary.earliestDate != null && summary.latestDate != null) {
+                            Text(
+                                text = stringResource(
+                                    R.string.backup_preview_range,
+                                    summary.earliestDate,
+                                    summary.latestDate
+                                ),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = palette.mutedText
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = stringResource(R.string.backup_preview_empty),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = palette.mutedText
+                        )
+                    }
+                    Text(
+                        text = stringResource(R.string.backup_preview_merge_note),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = palette.mutedText
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { restoreProfile = !restoreProfile },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = restoreProfile,
+                            onCheckedChange = { restoreProfile = it }
+                        )
+                        Text(
+                            text = stringResource(R.string.backup_preview_restore_profile),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = palette.primaryText
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { onConfirmRestoreBackup(backupState.snapshot, restoreProfile) },
+                    colors = ButtonDefaults.buttonColors(containerColor = palette.accent)
+                ) {
+                    Text(stringResource(R.string.backup_preview_confirm), color = palette.background)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismissBackupState) {
+                    Text(stringResource(R.string.action_cancel), color = palette.mutedText)
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun PassphraseTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    showPassword: Boolean,
+    onToggleShowPassword: () -> Unit,
+    isError: Boolean = false
+) {
+    val palette = LocalStepPalette.current
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        singleLine = true,
+        isError = isError,
+        label = { Text(label) },
+        visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+        trailingIcon = {
+            TextButton(onClick = onToggleShowPassword) {
+                Text(
+                    text = stringResource(
+                        if (showPassword) R.string.backup_passphrase_hide else R.string.backup_passphrase_show
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = palette.accent
+                )
+            }
+        },
+        modifier = Modifier.fillMaxWidth()
+    )
 }
 
 private fun roundStride(value: Float): Float = (value * 100f).roundToInt() / 100f

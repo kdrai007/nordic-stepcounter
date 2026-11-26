@@ -70,6 +70,44 @@
     <string name="action_save">SAVE</string>
     <string name="action_cancel">CANCEL</string>
 
+    <!-- Cloud & Backup -->
+    <string name="profile_cloud_backup">CLOUD &amp; BACKUP</string>
+    <string name="backup_auto_status">Android Auto Backup: Active (zero-permission)</string>
+    <string name="backup_last_manual_never">Last manual backup: Never</string>
+    <string name="backup_last_manual_date">Last manual backup: %1$s</string>
+    <string name="backup_export_button">EXPORT BACKUP</string>
+    <string name="backup_restore_button">RESTORE BACKUP</string>
+    <string name="backup_export_dialog_title">EXPORT BACKUP</string>
+    <string name="backup_export_dialog_desc">Save to Google Drive, Nextcloud, or local storage. Leave passphrase blank for plain JSON, or enter one to encrypt with AES-256.</string>
+    <string name="backup_passphrase_label">Passphrase (optional)</string>
+    <string name="backup_passphrase_confirm_label">Confirm passphrase</string>
+    <string name="backup_passphrase_mismatch">Passphrases do not match</string>
+    <string name="backup_passphrase_show">Show</string>
+    <string name="backup_passphrase_hide">Hide</string>
+    <string name="backup_export_continue">CHOOSE LOCATION</string>
+    <string name="backup_unlock_title">ENCRYPTED BACKUP</string>
+    <string name="backup_unlock_desc">Enter the passphrase used when this backup was exported.</string>
+    <string name="backup_unlock_label">Passphrase</string>
+    <string name="backup_unlock_wrong">Incorrect passphrase or corrupted backup</string>
+    <string name="backup_unlock_action">UNLOCK</string>
+    <string name="backup_preview_title">RESTORE BACKUP</string>
+    <string name="backup_preview_summary">%1$d days • %2$s total steps</string>
+    <string name="backup_preview_range">Range: %1$s to %2$s</string>
+    <string name="backup_preview_empty">No daily step records found in this backup.</string>
+    <string name="backup_preview_merge_note">Existing local days are merged safely by keeping the higher step count.</string>
+    <string name="backup_preview_restore_profile">Also restore profile, daily goal &amp; theme</string>
+    <string name="backup_preview_confirm">MERGE &amp; RESTORE</string>
+    <string name="backup_working_export">Exporting backup…</string>
+    <string name="backup_working_restore">Reading backup…</string>
+    <string name="backup_success_export">Exported %1$d days cleanly.</string>
+    <string name="backup_success_restore">Restored %1$d days (%2$d updated).</string>
+    <string name="backup_error_read_failed">Could not read the selected backup file.</string>
+    <string name="backup_error_write_failed">Could not write backup to the chosen destination.</string>
+    <string name="backup_error_too_large">Selected file exceeds the 10 MB backup limit.</string>
+    <string name="backup_error_invalid_format">Selected file is not a valid Nordic Step Counter backup.</string>
+    <string name="backup_error_unsupported_version">This backup was created by a newer app version. Please update the app to restore it.</string>
+    <string name="backup_error_unknown">Backup operation failed. Please try again.</string>
+
     <!-- Service & Notification -->
     <string name="notification_channel_name">Step Tracking Service</string>
     <string name="notification_channel_description">Shows live daily step count and goal progress</string>

@@ -52,6 +52,8 @@ abstract class StepDatabase : RoomDatabase() {
                     StepDatabase::class.java,
                     "nordic_steps.db"
                 )
+                    // Keep the SQLite file self-contained at rest so Auto Backup never misses WAL changes.
+                    .setJournalMode(JournalMode.TRUNCATE)
                     .addMigrations(MIGRATION_1_2)
                     .build()
                     .also { INSTANCE = it }

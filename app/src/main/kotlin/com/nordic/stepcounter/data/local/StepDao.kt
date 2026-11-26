@@ -32,6 +32,12 @@ interface StepDao {
     @Query("SELECT * FROM hourly_steps WHERE date = :date AND hour = :hour LIMIT 1")
     suspend fun getHourlyRecordDirect(date: String, hour: Int): HourlyStepEntity?
 
+    @Query("SELECT * FROM daily_steps ORDER BY date ASC")
+    suspend fun getAllDailyRecordsDirect(): List<DailyStepEntity>
+
+    @Query("SELECT * FROM hourly_steps ORDER BY date ASC, hour ASC")
+    suspend fun getAllHourlyRecordsDirect(): List<HourlyStepEntity>
+
     @Query("SELECT * FROM sensor_state WHERE id = ${SensorStateEntity.SINGLETON_ID} LIMIT 1")
     fun getSensorStateFlow(): Flow<SensorStateEntity?>
 
@@ -46,6 +52,21 @@ interface StepDao {
 
     @Upsert
     suspend fun upsertHourly(entity: HourlyStepEntity)
+
+    @Upsert
+    suspend fun upsertAllDaily(entities: List<DailyStepEntity>)
+
+    @Upsert
+    suspend fun upsertAllHourly(entities: List<HourlyStepEntity>)
+
+    @Transaction
+    suspend fun applyMergedBackup(
+        daily: List<DailyStepEntity>,
+        hourly: List<HourlyStepEntity>
+    ) {
+        if (daily.isNotEmpty()) upsertAllDaily(daily)
+        if (hourly.isNotEmpty()) upsertAllHourly(hourly)
+    }
 
     @Transaction
     suspend fun upsertDailyAndHourly(daily: DailyStepEntity, hourly: HourlyStepEntity?) {

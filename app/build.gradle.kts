@@ -103,6 +103,7 @@ dependencies {
   testImplementation(libs.kotlinx.coroutines.test)
   testImplementation(libs.androidx.room.testing)
   testImplementation(libs.mockk)
+  testImplementation(libs.org.json)
   testImplementation(libs.robolectric)
 
   // Instrumented tests

@@ -78,6 +78,7 @@ class ProfilePreferences(
         val KEY_CUSTOM_STRIDE_METERS = floatPreferencesKey("key_custom_stride_meters")
         val KEY_DAILY_GOAL = intPreferencesKey("key_daily_goal")
         val KEY_APP_THEME = stringPreferencesKey("key_app_theme")
+        val KEY_LAST_BACKUP_TIMESTAMP_MS = longPreferencesKey("key_last_backup_timestamp_ms")
 
         // Legacy v1 keys migrated once into Room SensorStateEntity
         val KEY_IS_PAUSED = booleanPreferencesKey("key_is_paused")
@@ -106,6 +107,18 @@ class ProfilePreferences(
 
     val dailyGoalFlow: Flow<Int> = userProfileFlow.map { it.dailyGoal }.distinctUntilChanged()
     val appThemeFlow: Flow<AppTheme> = userProfileFlow.map { it.appTheme }.distinctUntilChanged()
+    val lastBackupTimestampFlow: Flow<Long> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.KEY_LAST_BACKUP_TIMESTAMP_MS] ?: 0L
+        }
+        .distinctUntilChanged()
 
     suspend fun updateDailyGoal(goal: Int) {
         dataStore.edit { preferences ->
@@ -130,6 +143,32 @@ class ProfilePreferences(
     suspend fun updateAppTheme(theme: AppTheme) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.KEY_APP_THEME] = theme.storageKey
+        }
+    }
+
+    suspend fun updateLastBackupTimestamp(timestampMs: Long) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.KEY_LAST_BACKUP_TIMESTAMP_MS] = timestampMs.coerceAtLeast(0L)
+        }
+    }
+
+    suspend fun restoreProfile(profile: UserProfile) {
+        val safeHeight = if (profile.heightCm.isFinite()) profile.heightCm.coerceIn(100f, 250f) else 175.0f
+        val safeWeight = if (profile.weightKg.isFinite()) profile.weightKg.coerceIn(30f, 250f) else 70.0f
+        val safeCustomStride = if (profile.customStrideLengthMeters.isFinite() && profile.customStrideLengthMeters > 0f) {
+            profile.customStrideLengthMeters.coerceIn(0.30f, 1.50f)
+        } else {
+            0.0f
+        }
+        val safeGoal = profile.dailyGoal.coerceIn(1_000, 100_000)
+
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.KEY_HEIGHT_CM] = safeHeight
+            preferences[PreferencesKeys.KEY_WEIGHT_KG] = safeWeight
+            preferences[PreferencesKeys.KEY_IS_MALE] = profile.isMale
+            preferences[PreferencesKeys.KEY_CUSTOM_STRIDE_METERS] = safeCustomStride
+            preferences[PreferencesKeys.KEY_DAILY_GOAL] = safeGoal
+            preferences[PreferencesKeys.KEY_APP_THEME] = profile.appTheme.storageKey
         }
     }
 
